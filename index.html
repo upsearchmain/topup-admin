@@ -5,56 +5,117 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>무통장 자동충전 관리</title>
 <style>
-  :root { --brand:#5d00c8; --ink:#17141f; --muted:#77748a; --line:#e9e8f1; --bg:#f6f7fb; }
+  :root { --brand:#5d00c8; --brand-soft:#f3ecfc; --ink:#17141f; --muted:#77748a; --line:#e9e8f1; --bg:#f6f7fb; --ok:#1d7a3e; --warn:#8a5b00; --danger:#c62a2f; }
   * { box-sizing:border-box; }
-  body { font-family:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:var(--bg); color:var(--ink); margin:0; padding:20px; }
-  .wrap { max-width:1240px; margin:0 auto; }
-  h1 { font-size:20px; margin:0 0 4px; }
-  .sub { color:var(--muted); font-size:13px; margin:0 0 18px; }
-  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:22px; }
-  .stat { background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  body { font-family:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:var(--bg); color:var(--ink); margin:0; }
+  .topbar { position:sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid var(--line); padding:12px 20px; }
+  .topbar-inner { max-width:1280px; margin:0 auto; display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  h1 { font-size:17px; margin:0; margin-right:auto; display:flex; align-items:center; gap:8px; }
+  h1 .dot { width:8px; height:8px; border-radius:50%; background:#22c55e; display:inline-block; }
+  .ctl { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  select, input[type="date"], input[type="search"] { font:inherit; font-size:13px; padding:7px 10px; border:1.5px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); outline:none; }
+  select:focus, input:focus { border-color:var(--brand); }
+  input[type="search"] { width:170px; }
+  .btn { font:inherit; font-size:13px; font-weight:700; padding:8px 14px; border:0; border-radius:10px; cursor:pointer; transition:filter .15s; }
+  .btn:hover { filter:brightness(.95); }
+  .btn-brand { background:var(--brand); color:#fff; }
+  .btn-soft { background:var(--brand-soft); color:var(--brand); }
+  .btn-ghost { background:#f1f0f6; color:#3a3745; }
+  .wrap { max-width:1280px; margin:0 auto; padding:18px 20px 60px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 14px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:18px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:14px; padding:13px 15px; }
   .stat .k { font-size:12px; color:var(--muted); }
-  .stat .v { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; }
-  h2 { font-size:15px; margin:26px 0 8px; }
-  .tablewrap { overflow-x:auto; background:#fff; border:1px solid var(--line); border-radius:12px; }
-  table { width:100%; border-collapse:collapse; font-size:13px; min-width:760px; }
-  th { background:#f3f1fa; color:var(--brand); font-size:11.5px; text-align:left; padding:8px 10px; white-space:nowrap; }
-  td { padding:8px 10px; border-top:1px solid #f1f0f6; vertical-align:top; white-space:nowrap; }
+  .stat .v { font-size:21px; font-weight:800; font-variant-numeric:tabular-nums; margin-top:2px; }
+  .tabs { display:flex; gap:4px; margin-bottom:14px; overflow-x:auto; }
+  .tab { font-size:13.5px; font-weight:700; padding:9px 16px; border-radius:12px; background:transparent; border:0; color:var(--muted); cursor:pointer; white-space:nowrap; }
+  .tab.active { background:#fff; color:var(--brand); border:1px solid var(--line); box-shadow:0 2px 8px rgba(60,20,120,.06); }
+  .tab .cnt { display:inline-block; min-width:18px; padding:1px 6px; margin-left:4px; border-radius:999px; background:var(--brand-soft); color:var(--brand); font-size:11px; }
+  .tab.active .cnt { background:var(--brand); color:#fff; }
+  .panel { display:none; }
+  .panel.active { display:block; }
+  h2 { font-size:14.5px; margin:20px 0 8px; }
+  .tablewrap { overflow-x:auto; background:#fff; border:1px solid var(--line); border-radius:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; min-width:780px; }
+  th { background:#f7f5fc; color:var(--brand); font-size:11.5px; text-align:left; padding:9px 12px; white-space:nowrap; position:sticky; top:0; }
+  td { padding:9px 12px; border-top:1px solid #f1f0f6; vertical-align:middle; white-space:nowrap; }
+  tr:hover td { background:#fbfaff; }
   td.raw { white-space:normal; min-width:220px; font-size:11.5px; color:var(--muted); }
   .num { font-variant-numeric:tabular-nums; }
   .muted { color:#a5a2b5; font-size:12px; }
-  .chip { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; }
-  .empty { padding:14px; color:#a5a2b5; font-size:13px; }
-  #error { display:none; background:#fff1f1; border:1px solid #ffd9d9; color:#c62a2f; border-radius:12px; padding:12px 14px; margin-bottom:16px; font-size:13px; }
+  .chip { display:inline-block; font-size:11px; font-weight:700; padding:2.5px 9px; border-radius:999px; }
+  .empty { padding:16px; color:#a5a2b5; font-size:13px; }
+  .btn-xs { font-size:11.5px; font-weight:700; padding:5px 10px; border:0; border-radius:8px; cursor:pointer; }
+  .btn-done { background:var(--brand); color:#fff; }
+  .btn-undo { background:#f1f0f6; color:var(--muted); }
+  #error { display:none; background:#fff1f1; border:1px solid #ffd9d9; color:var(--danger); border-radius:12px; padding:12px 14px; margin-bottom:14px; font-size:13px; }
+  @media (max-width:720px){ .topbar-inner{gap:8px} h1{width:100%} input[type="search"]{width:130px} }
 </style>
 </head>
 <body>
+<div class="topbar"><div class="topbar-inner">
+  <h1><span class="dot"></span>무통장 자동충전 관리</h1>
+  <div class="ctl">
+    <select id="range">
+      <option value="recent">최근 (빠름)</option>
+      <option value="today">오늘</option>
+      <option value="7d">최근 7일</option>
+      <option value="30d">최근 30일</option>
+      <option value="month">이번 달</option>
+      <option value="custom">기간 직접 선택</option>
+    </select>
+    <span id="customRange" style="display:none">
+      <input type="date" id="dateFrom"> ~ <input type="date" id="dateTo">
+      <button class="btn btn-soft" id="applyRange">적용</button>
+    </span>
+    <input type="search" id="q" placeholder="아이디·입금자명 검색">
+    <button class="btn btn-brand" id="csvBtn">⬇ CSV 내려받기</button>
+    <button class="btn btn-ghost" id="refreshBtn">새로고침</button>
+  </div>
+</div></div>
+
 <div class="wrap">
-  <h1>무통장 자동충전 관리</h1>
-  <p class="sub">30초마다 자동 새로고침 · <span id="ts">불러오는 중…</span></p>
+  <p class="sub" id="ts">불러오는 중…</p>
   <div id="error"></div>
   <div class="stats" id="stats"></div>
-  <h2>🔴 수동 확인 필요한 입금</h2><div class="tablewrap" id="manual"></div>
-  <h2>⏳ 진행 중인 신청 (입금 대기·부분 입금·지급 대기)</h2><div class="tablewrap" id="waiting"></div>
-  <h2>📋 현금영수증·세금계산서 신청</h2><div class="tablewrap" id="tax"></div>
-  <h2>최근 입금 문자</h2><div class="tablewrap" id="deposits"></div>
-  <h2>최근 신청 전체</h2><div class="tablewrap" id="apps"></div>
-  <h2>지급 로그</h2><div class="tablewrap" id="payouts"></div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="dash">대시보드</button>
+    <button class="tab" data-tab="apps">신청 내역<span class="cnt" id="cnt-apps">0</span></button>
+    <button class="tab" data-tab="deps">입금 내역<span class="cnt" id="cnt-deps">0</span></button>
+    <button class="tab" data-tab="tax">세금 발행<span class="cnt" id="cnt-tax">0</span></button>
+    <button class="tab" data-tab="pays">지급·정산<span class="cnt" id="cnt-pays">0</span></button>
+  </div>
+
+  <div class="panel active" id="panel-dash">
+    <h2>🔴 수동 확인 필요한 입금</h2><div class="tablewrap" id="t-manual"></div>
+    <h2>⏳ 진행 중인 신청</h2><div class="tablewrap" id="t-waiting"></div>
+    <h2>📋 발행 대기 (현금영수증·세금계산서)</h2><div class="tablewrap" id="t-taxpending"></div>
+  </div>
+  <div class="panel" id="panel-apps"><h2>신청 내역</h2><div class="tablewrap" id="t-apps"></div></div>
+  <div class="panel" id="panel-deps"><h2>입금 내역 (문자 원문 포함)</h2><div class="tablewrap" id="t-deps"></div></div>
+  <div class="panel" id="panel-tax">
+    <h2>발행 대기</h2><div class="tablewrap" id="t-tax-pending"></div>
+    <h2>발행 완료</h2><div class="tablewrap" id="t-tax-done"></div>
+  </div>
+  <div class="panel" id="panel-pays"><h2>지급 로그</h2><div class="tablewrap" id="t-pays"></div></div>
 </div>
+
 <script>
-// ── 설정 ──
 var API = "https://imhxdysqwmpnzmionjio.supabase.co/functions/v1/admin";
-var EMBEDDED_KEY = "__ADMIN_KEY__"; // 로컬 파일 배포 시 주입; 웹 배포본은 placeholder 유지
+var EMBEDDED_KEY = "__ADMIN_KEY__";
 var KEY = new URLSearchParams(location.search).get("key")
   || localStorage.getItem("topup_admin_key")
   || (EMBEDDED_KEY.indexOf("__") === 0 ? "" : EMBEDDED_KEY);
 if (!KEY) KEY = prompt("관리 키를 입력하세요 (한 번만 입력하면 기억됩니다)") || "";
 if (KEY) try { localStorage.setItem("topup_admin_key", KEY); } catch (e) {}
 
+var DATA = null, CUR_TAB = "dash";
+
 function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 function won(n){ return Number(n||0).toLocaleString("ko-KR"); }
-function dt(s){ return s ? new Date(s).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "-"; }
-function chip(text,bg,color){ return '<span class="chip" style="background:'+bg+';color:'+color+'">'+esc(text)+'</span>'; }
+function dt(s){ return s ? new Date(s).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",year:"2-digit",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "-"; }
+function chip(t,bg,c){ return '<span class="chip" style="background:'+bg+';color:'+c+'">'+esc(t)+'</span>'; }
 function panelChip(p){ return p==="sh" ? chip("소셜헬퍼","#f3ecfc","#5d00c8") : chip("팔로워샵","#e8f0fe","#1a56db"); }
 function appStatus(s){
   return { pending:chip("입금 대기","#fff7e5","#8a5b00"), partial:chip("부분 입금","#ffedd5","#b45309"),
@@ -68,76 +129,176 @@ function depStatus(d){
   if (!d.parse_ok) c += " " + chip("파싱실패","#fff1f1","#c62a2f");
   return c;
 }
-function taxChip(t){
-  if (!t) return "";
-  return t.type==="cash_receipt" ? chip("현금영수증","#fef9c3","#854d0e") : chip("세금계산서","#fce7f3","#9d174d");
-}
+function taxChip(t){ if(!t) return ""; return t.type==="cash_receipt" ? chip("현금영수증","#fef9c3","#854d0e") : chip("세금계산서","#fce7f3","#9d174d"); }
 function taxDetail(t){
-  if (!t) return "-";
+  if(!t) return "-";
   return t.type==="cash_receipt" ? "휴대폰 "+esc(t.phone||"-")
     : esc(t.company||"-")+" / 대표 "+esc(t.ceo||"-")+" / "+esc(t.biz_number||"-")+" / "+esc(t.email||"-");
 }
-function table(id, head, rows, emptyText){
-  document.getElementById(id).innerHTML = rows.length
+function table(el, head, rows, emptyText){
+  document.getElementById(el).innerHTML = rows.length
     ? "<table><tr>"+head.map(function(h){return "<th>"+h+"</th>";}).join("")+"</tr>"+rows.join("")+"</table>"
     : '<div class="empty">'+emptyText+"</div>";
 }
+function matchQ(str){
+  var q = document.getElementById("q").value.trim().toLowerCase();
+  if (!q) return true;
+  return String(str||"").toLowerCase().indexOf(q) >= 0;
+}
 function appRow(a){
   return "<tr><td>#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td><b>"+esc(a.username)+"</b></td><td>"+esc(a.depositor_name)+
-    '</td><td class="num">'+won(a.amount_supply)+"P / "+won(a.amount_total)+'원</td><td class="num">'+won(a.paid_amount)+
+    '</td><td class="num">'+won(a.amount_supply)+"P</td><td class=\"num\">"+won(a.amount_total)+'원</td><td class="num">'+won(a.paid_amount)+
     "원</td><td>"+appStatus(a.status)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt(a.created_at)+"</td></tr>";
 }
 function depRow(d){
   return "<tr><td>#"+d.id+"</td><td>"+esc(d.bank||"-")+"</td><td><b>"+esc(d.depositor_name||"?")+'</b></td><td class="num">'+
     (d.amount==null?"-":won(d.amount)+"원")+"</td><td>"+depStatus(d)+"</td><td>"+(d.matched_application_id?"app#"+d.matched_application_id:'<span class="muted">-</span>')+
-    '</td><td class="muted">'+dt(d.received_at)+'</td><td class="raw">'+esc(String(d.raw_sms||"").slice(0,90))+"</td></tr>";
+    '</td><td class="muted">'+dt(d.received_at)+'</td><td class="raw">'+esc(String(d.raw_sms||"").slice(0,110))+"</td></tr>";
 }
-function render(data){
-  document.getElementById("ts").textContent = new Date().toLocaleString("ko-KR",{timeZone:"Asia/Seoul"}) + " 기준";
-  var s = data.summary;
-  var deposits = data.deposits, apps = data.applications;
+function taxRow(a, done){
+  var btn = done
+    ? '<button class="btn-xs btn-undo" onclick="taxDone('+a.id+',true)">되돌리기</button>'
+    : '<button class="btn-xs btn-done" onclick="taxDone('+a.id+',false)">발행완료 처리</button>';
+  return "<tr><td>#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td><b>"+esc(a.username)+"</b></td><td>"+taxChip(a.tax)+
+    '</td><td class="raw">'+taxDetail(a.tax)+'</td><td class="num">'+won(a.amount_total)+"원</td><td>"+appStatus(a.status)+
+    '</td><td class="muted">'+dt(done ? a.tax_done_at : a.created_at)+"</td><td>"+btn+"</td></tr>";
+}
+function render(){
+  if (!DATA) return;
+  var s = DATA.summary;
+  var deposits = DATA.deposits.filter(function(d){ return matchQ(d.depositor_name)||matchQ(d.raw_sms); });
+  var apps = DATA.applications.filter(function(a){ return matchQ(a.username)||matchQ(a.depositor_name); });
+  var pays = DATA.payouts.filter(function(p){ return matchQ(p.username); });
   var manual = deposits.filter(function(d){ return d.status==="manual"||d.status==="orphan"||!d.parse_ok; });
   var waiting = apps.filter(function(a){ return a.status==="pending"||a.status==="partial"||a.status==="matched"; });
-  var taxApps = apps.filter(function(a){ return a.tax; });
+  var taxAll = apps.filter(function(a){ return a.tax; });
+  var taxPending = taxAll.filter(function(a){ return !a.tax_done; });
+  var taxDoneArr = taxAll.filter(function(a){ return a.tax_done; });
+
+  document.getElementById("ts").textContent = new Date().toLocaleString("ko-KR",{timeZone:"Asia/Seoul"}) + " 기준 · 30초마다 자동 새로고침 · 표시 " + apps.length + "건(신청) / " + deposits.length + "건(입금)";
   document.getElementById("stats").innerHTML =
     '<div class="stat"><div class="k">오늘 신청</div><div class="v">'+s.today_applications+'건</div></div>'+
     '<div class="stat"><div class="k">오늘 입금 문자</div><div class="v">'+s.today_deposits+'건</div></div>'+
     '<div class="stat"><div class="k">오늘 매칭·충전</div><div class="v">'+s.today_matched+'건</div></div>'+
     '<div class="stat"><div class="k">오늘 충전 합계</div><div class="v">'+won(s.today_points)+'P</div></div>'+
-    '<div class="stat"><div class="k">수동 확인 대기</div><div class="v" style="color:'+(manual.length?"#c62a2f":"#1d7a3e")+'">'+manual.length+'건</div></div>';
-  var depHead = ["ID","은행","입금자","금액","상태","매칭","수신","원문"];
-  var appHead = ["ID","패널","아이디","입금자명","충전/안내액","입금됨","상태","신청"];
-  table("manual", depHead, manual.map(depRow), "없음 — 전부 자동 처리되고 있어요 👍");
-  table("waiting", appHead, waiting.map(appRow), "진행 중인 신청 없음");
-  table("tax", ["ID","패널","아이디","종류","발행 정보","금액","상태","신청"], taxApps.map(function(a){
-    return "<tr><td>#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td><b>"+esc(a.username)+"</b></td><td>"+taxChip(a.tax)+
-      '</td><td class="raw">'+taxDetail(a.tax)+'</td><td class="num">'+won(a.amount_total)+"원</td><td>"+appStatus(a.status)+
-      '</td><td class="muted">'+dt(a.created_at)+"</td></tr>";
-  }), "신청 없음");
-  table("deposits", depHead, deposits.map(depRow), "아직 입금 없음");
-  table("apps", appHead, apps.map(appRow), "아직 신청 없음");
-  table("payouts", ["ID","신청","패널","아이디","포인트","방식","성공","시각"], data.payouts.map(function(p){
+    '<div class="stat"><div class="k">수동 확인 대기</div><div class="v" style="color:'+(manual.length?"var(--danger)":"var(--ok)")+'">'+manual.length+'건</div></div>'+
+    '<div class="stat"><div class="k">발행 대기</div><div class="v" style="color:'+(taxPending.length?"var(--warn)":"var(--ok)")+'">'+taxPending.length+'건</div></div>';
+
+  document.getElementById("cnt-apps").textContent = apps.length;
+  document.getElementById("cnt-deps").textContent = deposits.length;
+  document.getElementById("cnt-tax").textContent = taxPending.length;
+  document.getElementById("cnt-pays").textContent = pays.length;
+
+  var depHead = ["ID","은행","입금자","금액","상태","매칭","수신","문자 원문"];
+  var appHead = ["ID","패널","아이디","입금자명","충전","입금 안내액","입금됨","상태","신청 시각"];
+  var taxHead = ["ID","패널","아이디","종류","발행 정보","금액","상태","시각","처리"];
+
+  table("t-manual", depHead, manual.map(depRow), "없음 — 전부 자동 처리되고 있어요 👍");
+  table("t-waiting", appHead, waiting.map(appRow), "진행 중인 신청 없음");
+  table("t-taxpending", taxHead, taxPending.map(function(a){return taxRow(a,false);}), "발행 대기 없음");
+  table("t-apps", appHead, apps.map(appRow), "신청 없음");
+  table("t-deps", depHead, deposits.map(depRow), "입금 없음");
+  table("t-tax-pending", taxHead, taxPending.map(function(a){return taxRow(a,false);}), "발행 대기 없음");
+  table("t-tax-done", taxHead, taxDoneArr.map(function(a){return taxRow(a,true);}), "발행 완료 내역 없음");
+  table("t-pays", ["ID","신청","패널","아이디","포인트","방식","성공","시각"], pays.map(function(p){
     return "<tr><td>#"+p.id+"</td><td>app#"+p.application_id+"</td><td>"+panelChip(p.panel)+"</td><td><b>"+esc(p.username)+
       '</b></td><td class="num">'+won(p.points)+"P</td><td>"+(p.method==="manual"?"수동 대기":"자동(API)")+"</td><td>"+
       (p.succeeded?"✅":"⏳")+'</td><td class="muted">'+dt(p.created_at)+"</td></tr>";
-  }), "아직 지급 없음");
+  }), "지급 없음");
+}
+
+function rangeParams(){
+  var v = document.getElementById("range").value;
+  var kst = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Seoul"}));
+  function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+  if (v==="recent") return "";
+  if (v==="custom") {
+    var f = document.getElementById("dateFrom").value, t = document.getElementById("dateTo").value;
+    return (f?"&from="+f:"") + (t?"&to="+t:"") + "&limit=5000";
+  }
+  var from = new Date(kst);
+  if (v==="7d") from.setDate(kst.getDate()-6);
+  if (v==="30d") from.setDate(kst.getDate()-29);
+  if (v==="month") from.setDate(1);
+  return "&from="+ymd(from)+"&to="+ymd(kst)+"&limit=5000";
 }
 function load(){
-  fetch(API+"?key="+encodeURIComponent(KEY))
+  fetch(API+"?key="+encodeURIComponent(KEY)+rangeParams())
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d.ok) throw new Error(d.error||"unknown");
+      DATA = d;
       document.getElementById("error").style.display="none";
-      render(d);
+      render();
     })
     .catch(function(e){
       var el = document.getElementById("error");
       el.style.display="block";
-      el.textContent = "데이터를 불러오지 못했어요: " + e.message + " — 인터넷 연결과 키를 확인해 주세요.";
+      el.textContent = "데이터를 불러오지 못했어요: " + e.message;
     });
 }
+function taxDone(id, undo){
+  if (!undo && !confirm("#"+id+" 발행완료 처리할까요?")) return;
+  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ key: KEY, action: "tax_done", application_id: id, undo: undo }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(!d.ok) alert("실패: "+(d.error||"")); load(); })
+    .catch(function(e){ alert("네트워크 오류: "+e.message); });
+}
+function toCsv(rows, headers, pick){
+  var lines = [headers.join(",")];
+  rows.forEach(function(r){
+    lines.push(pick(r).map(function(v){
+      v = String(v==null?"":v).replace(/"/g,'""');
+      return /[",\n]/.test(v) ? '"'+v+'"' : v;
+    }).join(","));
+  });
+  return "﻿" + lines.join("\r\n"); // BOM: 엑셀 한글 호환
+}
+function downloadCsv(){
+  if (!DATA) return;
+  var kst = new Date().toLocaleString("sv-SE",{timeZone:"Asia/Seoul"}).slice(0,10);
+  var files = {
+    "신청내역": toCsv(DATA.applications, ["ID","패널","아이디","입금자명","충전포인트","부가세","입금안내액","입금된금액","상태","세금신청","발행완료","신청시각(KST)"], function(a){
+      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.amount_vat, a.amount_total, a.paid_amount, a.status, a.tax?(a.tax.type==="cash_receipt"?"현금영수증":"세금계산서"):"", a.tax_done?"완료":"", dt(a.created_at)];
+    }),
+    "입금내역": toCsv(DATA.deposits, ["ID","은행","입금자","금액","상태","매칭신청ID","수신시각(KST)","문자원문"], function(d){
+      return [d.id, d.bank, d.depositor_name, d.amount, d.status, d.matched_application_id, dt(d.received_at), d.raw_sms];
+    }),
+    "지급로그": toCsv(DATA.payouts, ["ID","신청ID","패널","아이디","포인트","방식","성공","시각(KST)"], function(p){
+      return [p.id, p.application_id, p.panel==="sh"?"소셜헬퍼":"팔로워샵", p.username, p.points, p.method, p.succeeded?"성공":"대기", dt(p.created_at)];
+    }),
+  };
+  Object.keys(files).forEach(function(name){
+    var blob = new Blob([files[name]], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "무통장_"+name+"_"+kst+".csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+}
+
+document.querySelectorAll(".tab").forEach(function(t){
+  t.addEventListener("click", function(){
+    document.querySelectorAll(".tab").forEach(function(x){ x.classList.remove("active"); });
+    document.querySelectorAll(".panel").forEach(function(x){ x.classList.remove("active"); });
+    t.classList.add("active");
+    CUR_TAB = t.dataset.tab;
+    document.getElementById("panel-"+CUR_TAB).classList.add("active");
+  });
+});
+document.getElementById("range").addEventListener("change", function(){
+  document.getElementById("customRange").style.display = this.value==="custom" ? "inline" : "none";
+  if (this.value!=="custom") load();
+});
+document.getElementById("applyRange").addEventListener("click", load);
+document.getElementById("refreshBtn").addEventListener("click", load);
+document.getElementById("csvBtn").addEventListener("click", downloadCsv);
+document.getElementById("q").addEventListener("input", render);
+
 load();
-setInterval(load, 30000);
+setInterval(function(){ if (document.getElementById("range").value==="recent") load(); }, 30000);
 </script>
 </body>
 </html>
