@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>무통장 자동충전 관리</title>
+<style>
+  :root { --brand:#5d00c8; --ink:#17141f; --muted:#77748a; --line:#e9e8f1; --bg:#f6f7fb; }
+  * { box-sizing:border-box; }
+  body { font-family:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:var(--bg); color:var(--ink); margin:0; padding:20px; }
+  .wrap { max-width:1240px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:22px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .stat .k { font-size:12px; color:var(--muted); }
+  .stat .v { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; }
+  h2 { font-size:15px; margin:26px 0 8px; }
+  .tablewrap { overflow-x:auto; background:#fff; border:1px solid var(--line); border-radius:12px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; min-width:760px; }
+  th { background:#f3f1fa; color:var(--brand); font-size:11.5px; text-align:left; padding:8px 10px; white-space:nowrap; }
+  td { padding:8px 10px; border-top:1px solid #f1f0f6; vertical-align:top; white-space:nowrap; }
+  td.raw { white-space:normal; min-width:220px; font-size:11.5px; color:var(--muted); }
+  .num { font-variant-numeric:tabular-nums; }
+  .muted { color:#a5a2b5; font-size:12px; }
+  .chip { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; }
+  .empty { padding:14px; color:#a5a2b5; font-size:13px; }
+  #error { display:none; background:#fff1f1; border:1px solid #ffd9d9; color:#c62a2f; border-radius:12px; padding:12px 14px; margin-bottom:16px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>무통장 자동충전 관리</h1>
+  <p class="sub">30초마다 자동 새로고침 · <span id="ts">불러오는 중…</span></p>
+  <div id="error"></div>
+  <div class="stats" id="stats"></div>
+  <h2>🔴 수동 확인 필요한 입금</h2><div class="tablewrap" id="manual"></div>
+  <h2>⏳ 진행 중인 신청 (입금 대기·부분 입금·지급 대기)</h2><div class="tablewrap" id="waiting"></div>
+  <h2>📋 현금영수증·세금계산서 신청</h2><div class="tablewrap" id="tax"></div>
+  <h2>최근 입금 문자</h2><div class="tablewrap" id="deposits"></div>
+  <h2>최근 신청 전체</h2><div class="tablewrap" id="apps"></div>
+  <h2>지급 로그</h2><div class="tablewrap" id="payouts"></div>
+</div>
+<script>
+// ── 설정 ──
+var API = "https://imhxdysqwmpnzmionjio.supabase.co/functions/v1/admin";
+var EMBEDDED_KEY = "__ADMIN_KEY__"; // 로컬 파일 배포 시 주입; 웹 배포본은 placeholder 유지
+var KEY = new URLSearchParams(location.search).get("key")
+  || localStorage.getItem("topup_admin_key")
+  || (EMBEDDED_KEY.indexOf("__") === 0 ? "" : EMBEDDED_KEY);
+if (!KEY) KEY = prompt("관리 키를 입력하세요 (한 번만 입력하면 기억됩니다)") || "";
+if (KEY) try { localStorage.setItem("topup_admin_key", KEY); } catch (e) {}
+
+function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function won(n){ return Number(n||0).toLocaleString("ko-KR"); }
+function dt(s){ return s ? new Date(s).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "-"; }
+function chip(text,bg,color){ return '<span class="chip" style="background:'+bg+';color:'+color+'">'+esc(text)+'</span>'; }
+function panelChip(p){ return p==="sh" ? chip("소셜헬퍼","#f3ecfc","#5d00c8") : chip("팔로워샵","#e8f0fe","#1a56db"); }
+function appStatus(s){
+  return { pending:chip("입금 대기","#fff7e5","#8a5b00"), partial:chip("부분 입금","#ffedd5","#b45309"),
+    matched:chip("매칭됨·지급 대기","#e0f2fe","#0369a1"), paid:chip("충전 완료","#effaf2","#1d7a3e"),
+    expired:chip("만료","#f1f5f9","#64748b"), canceled:chip("취소","#f1f5f9","#64748b") }[s] || esc(s);
+}
+function depStatus(d){
+  var c = { unmatched:chip("미매칭","#f1f5f9","#64748b"), matched:chip("매칭됨","#effaf2","#1d7a3e"),
+    orphan:chip("신청 없음","#fff1f1","#c62a2f"), manual:chip("수동 확인","#fff1f1","#c62a2f"),
+    refunded:chip("환불","#f1f5f9","#64748b") }[d.status] || esc(d.status);
+  if (!d.parse_ok) c += " " + chip("파싱실패","#fff1f1","#c62a2f");
+  return c;
+}
+function taxChip(t){
+  if (!t) return "";
+  return t.type==="cash_receipt" ? chip("현금영수증","#fef9c3","#854d0e") : chip("세금계산서","#fce7f3","#9d174d");
+}
+function taxDetail(t){
+  if (!t) return "-";
+  return t.type==="cash_receipt" ? "휴대폰 "+esc(t.phone||"-")
+    : esc(t.company||"-")+" / 대표 "+esc(t.ceo||"-")+" / "+esc(t.biz_number||"-")+" / "+esc(t.email||"-");
+}
+function table(id, head, rows, emptyText){
+  document.getElementById(id).innerHTML = rows.length
+    ? "<table><tr>"+head.map(function(h){return "<th>"+h+"</th>";}).join("")+"</tr>"+rows.join("")+"</table>"
+    : '<div class="empty">'+emptyText+"</div>";
+}
+function appRow(a){
+  return "<tr><td>#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td><b>"+esc(a.username)+"</b></td><td>"+esc(a.depositor_name)+
+    '</td><td class="num">'+won(a.amount_supply)+"P / "+won(a.amount_total)+'원</td><td class="num">'+won(a.paid_amount)+
+    "원</td><td>"+appStatus(a.status)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt(a.created_at)+"</td></tr>";
+}
+function depRow(d){
+  return "<tr><td>#"+d.id+"</td><td>"+esc(d.bank||"-")+"</td><td><b>"+esc(d.depositor_name||"?")+'</b></td><td class="num">'+
+    (d.amount==null?"-":won(d.amount)+"원")+"</td><td>"+depStatus(d)+"</td><td>"+(d.matched_application_id?"app#"+d.matched_application_id:'<span class="muted">-</span>')+
+    '</td><td class="muted">'+dt(d.received_at)+'</td><td class="raw">'+esc(String(d.raw_sms||"").slice(0,90))+"</td></tr>";
+}
+function render(data){
+  document.getElementById("ts").textContent = new Date().toLocaleString("ko-KR",{timeZone:"Asia/Seoul"}) + " 기준";
+  var s = data.summary;
+  var deposits = data.deposits, apps = data.applications;
+  var manual = deposits.filter(function(d){ return d.status==="manual"||d.status==="orphan"||!d.parse_ok; });
+  var waiting = apps.filter(function(a){ return a.status==="pending"||a.status==="partial"||a.status==="matched"; });
+  var taxApps = apps.filter(function(a){ return a.tax; });
+  document.getElementById("stats").innerHTML =
+    '<div class="stat"><div class="k">오늘 신청</div><div class="v">'+s.today_applications+'건</div></div>'+
+    '<div class="stat"><div class="k">오늘 입금 문자</div><div class="v">'+s.today_deposits+'건</div></div>'+
+    '<div class="stat"><div class="k">오늘 매칭·충전</div><div class="v">'+s.today_matched+'건</div></div>'+
+    '<div class="stat"><div class="k">오늘 충전 합계</div><div class="v">'+won(s.today_points)+'P</div></div>'+
+    '<div class="stat"><div class="k">수동 확인 대기</div><div class="v" style="color:'+(manual.length?"#c62a2f":"#1d7a3e")+'">'+manual.length+'건</div></div>';
+  var depHead = ["ID","은행","입금자","금액","상태","매칭","수신","원문"];
+  var appHead = ["ID","패널","아이디","입금자명","충전/안내액","입금됨","상태","신청"];
+  table("manual", depHead, manual.map(depRow), "없음 — 전부 자동 처리되고 있어요 👍");
+  table("waiting", appHead, waiting.map(appRow), "진행 중인 신청 없음");
+  table("tax", ["ID","패널","아이디","종류","발행 정보","금액","상태","신청"], taxApps.map(function(a){
+    return "<tr><td>#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td><b>"+esc(a.username)+"</b></td><td>"+taxChip(a.tax)+
+      '</td><td class="raw">'+taxDetail(a.tax)+'</td><td class="num">'+won(a.amount_total)+"원</td><td>"+appStatus(a.status)+
+      '</td><td class="muted">'+dt(a.created_at)+"</td></tr>";
+  }), "신청 없음");
+  table("deposits", depHead, deposits.map(depRow), "아직 입금 없음");
+  table("apps", appHead, apps.map(appRow), "아직 신청 없음");
+  table("payouts", ["ID","신청","패널","아이디","포인트","방식","성공","시각"], data.payouts.map(function(p){
+    return "<tr><td>#"+p.id+"</td><td>app#"+p.application_id+"</td><td>"+panelChip(p.panel)+"</td><td><b>"+esc(p.username)+
+      '</b></td><td class="num">'+won(p.points)+"P</td><td>"+(p.method==="manual"?"수동 대기":"자동(API)")+"</td><td>"+
+      (p.succeeded?"✅":"⏳")+'</td><td class="muted">'+dt(p.created_at)+"</td></tr>";
+  }), "아직 지급 없음");
+}
+function load(){
+  fetch(API+"?key="+encodeURIComponent(KEY))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) throw new Error(d.error||"unknown");
+      document.getElementById("error").style.display="none";
+      render(d);
+    })
+    .catch(function(e){
+      var el = document.getElementById("error");
+      el.style.display="block";
+      el.textContent = "데이터를 불러오지 못했어요: " + e.message + " — 인터넷 연결과 키를 확인해 주세요.";
+    });
+}
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
