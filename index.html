@@ -391,7 +391,8 @@ function render(){
   var manual = deposits.filter(function(d){ return d.status==="manual"||d.status==="orphan"||!d.parse_ok; });
   var waiting = apps.filter(function(a){ return a.status==="pending"||a.status==="partial"||a.status==="matched"; });
   var taxAll = apps.filter(function(a){ return a.tax; });
-  var taxPending = taxAll.filter(function(a){ return !a.tax_done; });
+  // 발행 대기는 입금이 완료되어 매칭된 건만 (미입금 신청은 발행 대상 아님)
+  var taxPending = taxAll.filter(function(a){ return !a.tax_done && (a.status === "paid" || a.status === "matched"); });
   var taxDoneArr = taxAll.filter(function(a){ return a.tax_done; });
 
   document.getElementById("ts").textContent = new Date().toLocaleString("ko-KR",{timeZone:"Asia/Seoul"}) + " 기준, 30초마다 자동 새로고침";
