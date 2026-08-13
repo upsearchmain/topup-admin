@@ -119,9 +119,13 @@
   .filterbar select { height:34px; font-size:12.5px; }
 
   @media (max-width:760px){
-    .topbar-inner { height:auto; flex-wrap:wrap; padding:10px 16px; }
+    .topbar-inner { height:auto; flex-wrap:wrap; padding:10px 16px; gap:8px; }
     .brand { width:100%; }
-    input[type="search"] { width:150px; }
+    select, .btn, input[type="date"] { flex:0 1 auto; min-width:0; }
+    .field { flex:1 1 140px; }
+    input[type="search"] { width:100%; min-width:120px; }
+    .btn { padding:0 12px; }
+    .userchip { margin-left:auto; }
     .wrap { padding:18px 16px 60px; }
   }
 </style>
@@ -242,6 +246,7 @@ var DATA = null;
 
 function showLogin(msg){
   document.getElementById("loginOverlay").classList.add("show");
+  setTimeout(function(){ var el = document.getElementById("login-id"); if (el && !el.value) el.focus(); }, 60);
   if (msg) { var el = document.getElementById("login-err"); el.style.display="block"; el.textContent = msg; }
 }
 function hideLogin(){ document.getElementById("loginOverlay").classList.remove("show"); }
@@ -315,7 +320,7 @@ function appRow(a){
 function depRow(d){
   var creditable = !d.matched_application_id && d.status !== "matched" && d.status !== "refunded" && d.amount > 0;
   var action = creditable
-    ? '<button class="btn-xs btn-done" onclick="openCredit('+d.id+','+(d.amount||0)+',\''+esc(d.depositor_name||"")+'\')">수동충전</button>'
+    ? '<button class="btn-xs btn-done credit-btn" data-dep-id="'+d.id+'" data-dep-amount="'+(d.amount||0)+'" data-dep-name="'+esc(d.depositor_name||"")+'">수동충전</button>'
     : (d.matched_application_id ? '<span class="muted">app#'+d.matched_application_id+"</span>" : '<span class="muted">-</span>');
   return "<tr><td class=\"muted\">#"+d.id+"</td><td>"+esc(d.bank||"-")+"</td><td class=\"strong\">"+esc(d.depositor_name||"?")+'</td><td class="num strong">'+
     (d.amount==null?"-":won(d.amount)+"원")+"</td><td>"+depStatus(d)+"</td><td>"+action+
@@ -495,6 +500,12 @@ function downloadCsv(){
     URL.revokeObjectURL(a.href);
   });
 }
+
+document.addEventListener("click", function(e){
+  var btn = e.target.closest ? e.target.closest(".credit-btn") : null;
+  if (!btn) return;
+  openCredit(Number(btn.dataset.depId), Number(btn.dataset.depAmount), btn.dataset.depName || "");
+});
 
 document.querySelectorAll(".tab").forEach(function(t){
   t.addEventListener("click", function(){
