@@ -151,7 +151,7 @@
   </span>
   <span class="field">
     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-    <input type="search" id="q" placeholder="아이디·입금자명 검색">
+    <input type="search" id="q" placeholder="아이디, 입금자명 검색">
   </span>
   <button class="btn btn-primary" id="csvBtn"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>CSV 내려받기</button>
   <button class="btn btn-outline" id="refreshBtn"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>새로고침</button>
@@ -206,13 +206,13 @@
     <button class="tab" data-tab="apps">신청 내역<span class="cnt" id="cnt-apps">0</span></button>
     <button class="tab" data-tab="deps">입금 내역<span class="cnt" id="cnt-deps">0</span></button>
     <button class="tab" data-tab="tax">세금 발행<span class="cnt" id="cnt-tax">0</span></button>
-    <button class="tab" data-tab="pays">지급·정산<span class="cnt" id="cnt-pays">0</span></button>
+    <button class="tab" data-tab="pays">지급 내역<span class="cnt" id="cnt-pays">0</span></button>
   </div>
 
   <div class="panel active" id="panel-dash">
     <div class="section"><div class="section-head"><h2>🔴 수동 확인 필요한 입금</h2></div><div class="tablewrap" id="t-manual"></div></div>
     <div class="section"><div class="section-head"><h2>⏳ 진행 중인 신청</h2></div><div class="tablewrap" id="t-waiting"></div></div>
-    <div class="section"><div class="section-head"><h2>📋 발행 대기 (현금영수증·세금계산서)</h2></div><div class="tablewrap" id="t-taxpending"></div></div>
+    <div class="section"><div class="section-head"><h2>📋 발행 대기 (현금영수증, 세금계산서)</h2></div><div class="tablewrap" id="t-taxpending"></div></div>
   </div>
   <div class="panel" id="panel-apps"><div class="section">
     <div class="section-head"><h2>신청 내역</h2></div>
@@ -300,7 +300,7 @@ function taxChip(t){ if(!t) return ""; return t.type==="cash_receipt" ? chip("�
 function taxDetail(t){
   if(!t) return "-";
   return t.type==="cash_receipt" ? "휴대폰 "+esc(t.phone||"-")
-    : esc(t.company||"-")+" · 대표 "+esc(t.ceo||"-")+" · "+esc(t.biz_number||"-")+" · "+esc(t.email||"-");
+    : esc(t.company||"-")+" / 대표 "+esc(t.ceo||"-")+" / "+esc(t.biz_number||"-")+" / "+esc(t.email||"-");
 }
 function table(el, head, rows, emptyTitle, emptySub){
   document.getElementById(el).innerHTML = rows.length
@@ -330,7 +330,7 @@ function depRow(d){
 var CREDIT_DEP = null;
 function openCredit(id, amount, name){
   CREDIT_DEP = id;
-  document.getElementById("credit-dep-label").textContent = "#"+id+" · "+(name||"?")+" · "+won(amount)+"원";
+  document.getElementById("credit-dep-label").textContent = "#"+id+" "+(name||"?")+", "+won(amount)+"원";
   document.getElementById("credit-username").value = "";
   var suggested = Math.floor(amount/1.1);
   document.getElementById("credit-points").value = suggested;
@@ -394,11 +394,11 @@ function render(){
   var taxPending = taxAll.filter(function(a){ return !a.tax_done; });
   var taxDoneArr = taxAll.filter(function(a){ return a.tax_done; });
 
-  document.getElementById("ts").textContent = new Date().toLocaleString("ko-KR",{timeZone:"Asia/Seoul"}) + " 기준 · 30초마다 자동 새로고침";
+  document.getElementById("ts").textContent = new Date().toLocaleString("ko-KR",{timeZone:"Asia/Seoul"}) + " 기준, 30초마다 자동 새로고침";
   document.getElementById("stats").innerHTML =
     statCard("오늘 신청", s.today_applications+"건", "doc") +
     statCard("오늘 입금 문자", s.today_deposits+"건", "msg") +
-    statCard("오늘 매칭·충전", s.today_matched+"건", "check") +
+    statCard("오늘 자동충전", s.today_matched+"건", "check") +
     statCard("오늘 충전 합계", won(s.today_points)+"P", "coin") +
     statCard("수동 확인 대기", manual.length+"건", "alert", manual.length?"danger":"ok") +
     statCard("발행 대기", taxPending.length+"건", "receipt", taxPending.length?"warn":"ok");
