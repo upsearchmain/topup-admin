@@ -204,9 +204,10 @@
   <div class="tabs" id="tabs">
     <button class="tab active" data-tab="dash">대시보드</button>
     <button class="tab" data-tab="apps">신청 내역<span class="cnt" id="cnt-apps">0</span></button>
+    <button class="tab" data-tab="done">충전 완료<span class="cnt" id="cnt-done">0</span></button>
     <button class="tab" data-tab="deps">입금 내역<span class="cnt" id="cnt-deps">0</span></button>
     <button class="tab" data-tab="tax">세금 발행<span class="cnt" id="cnt-tax">0</span></button>
-    <button class="tab" data-tab="pays">지급 내역<span class="cnt" id="cnt-pays">0</span></button>
+    <button class="tab" data-tab="pays">포인트 충전내역<span class="cnt" id="cnt-pays">0</span></button>
   </div>
 
   <div class="panel active" id="panel-dash">
@@ -229,12 +230,13 @@
     </div>
     <div class="tablewrap" id="t-apps"></div>
   </div></div>
+  <div class="panel" id="panel-done"><div class="section"><div class="section-head"><h2>충전 완료내역</h2></div><div class="tablewrap" id="t-done"></div></div></div>
   <div class="panel" id="panel-deps"><div class="section"><div class="section-head"><h2>입금 내역</h2></div><div class="tablewrap" id="t-deps"></div></div></div>
   <div class="panel" id="panel-tax">
     <div class="section"><div class="section-head"><h2>발행 대기</h2></div><div class="tablewrap" id="t-tax-pending"></div></div>
     <div class="section"><div class="section-head"><h2>발행 완료</h2></div><div class="tablewrap" id="t-tax-done"></div></div>
   </div>
-  <div class="panel" id="panel-pays"><div class="section"><div class="section-head"><h2>지급 로그</h2></div><div class="tablewrap" id="t-pays"></div></div></div>
+  <div class="panel" id="panel-pays"><div class="section"><div class="section-head"><h2>포인트 충전내역 (지급 기록)</h2></div><div class="tablewrap" id="t-pays"></div></div></div>
 </div>
 
 <script>
@@ -404,6 +406,8 @@ function render(){
     statCard("수동 확인 대기", manual.length+"건", "alert", manual.length?"danger":"ok") +
     statCard("발행 대기", taxPending.length+"건", "receipt", taxPending.length?"warn":"ok");
 
+  var doneApps = apps.filter(function(a){ return a.status === "paid"; });
+  document.getElementById("cnt-done").textContent = doneApps.length;
   document.getElementById("cnt-apps").textContent = apps.length;
   document.getElementById("cnt-deps").textContent = deposits.length;
   document.getElementById("cnt-tax").textContent = taxPending.length;
@@ -417,6 +421,7 @@ function render(){
   table("t-waiting", appHead, waiting.map(appRow), "진행 중인 신청 없음");
   table("t-taxpending", taxHead, taxPending.map(function(a){return taxRow(a,false);}), "발행 대기 없음");
   table("t-apps", appHead, apps.map(appRow), "신청 없음", "기간을 넓혀 보세요");
+  table("t-done", appHead, doneApps.map(appRow), "충전 완료 건 없음", "기간을 넓혀 보세요");
   table("t-deps", depHead, deposits.map(depRow), "입금 없음", "기간을 넓혀 보세요");
   table("t-tax-pending", taxHead, taxPending.map(function(a){return taxRow(a,false);}), "발행 대기 없음");
   table("t-tax-done", taxHead, taxDoneArr.map(function(a){return taxRow(a,true);}), "발행 완료 내역 없음");
@@ -481,9 +486,16 @@ function toCsv(rows, headers, pick){
 function downloadCsv(){
   if (!DATA) return;
   var kst = new Date().toLocaleString("sv-SE",{timeZone:"Asia/Seoul"}).slice(0,10);
-  var files = {
+  var allFiles = {
     "신청내역": toCsv(DATA.applications, ["ID","패널","아이디","입금자명","충전포인트","부가세","입금안내액","입금된금액","상태","세금신청","발행완료","신청시각(KST)"], function(a){
       return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.amount_vat, a.amount_total, a.paid_amount, a.status, a.tax?(a.tax.type==="cash_receipt"?"현금영수증":"세금계산서"):"", a.tax_done?"완료":"", dt(a.created_at)];
+    }),
+    "충전완료내역": toCsv(DATA.applications.filter(function(a){ return a.status === "paid"; }), ["ID","패널","아이디","입금자명","충전포인트","입금액","충전시각(KST)"], function(a){
+      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.paid_amount, dt(a.updated_at||a.created_at)];
+    }),
+    "세금발행내역": toCsv(DATA.applications.filter(function(a){ return a.tax; }), ["ID","패널","아이디","종류","발행정보","금액","발행완료","신청시각(KST)"], function(a){
+      var t = a.tax||{};
+      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, t.type==="cash_receipt"?"현금영수증":"세금계산서", t.type==="cash_receipt"?(t.phone||""):((t.company||"")+" "+(t.biz_number||"")+" "+(t.email||"")), a.amount_total, a.tax_done?"완료":"대기", dt(a.created_at)];
     }),
     "입금내역": toCsv(DATA.deposits, ["ID","은행","입금자","금액","상태","매칭신청ID","수신시각(KST)","문자원문"], function(d){
       return [d.id, d.bank, d.depositor_name, d.amount, d.status, d.matched_application_id, dt(d.received_at), d.raw_sms];
@@ -492,6 +504,11 @@ function downloadCsv(){
       return [p.id, p.application_id, p.panel==="sh"?"소셜헬퍼":"팔로워샵", p.username, p.points, p.method, p.succeeded?"성공":"대기", dt(p.created_at)];
     }),
   };
+  // 현재 탭에 해당하는 파일만 내려받기 (대시보드에서는 전체)
+  var tabFile = { apps: "신청내역", done: "충전완료내역", deps: "입금내역", tax: "세금발행내역", pays: "포인트충전내역" }[CUR_TAB];
+  var files = {};
+  if (tabFile && allFiles[tabFile]) files[tabFile] = allFiles[tabFile];
+  else files = allFiles;
   Object.keys(files).forEach(function(name){
     var blob = new Blob([files[name]], { type: "text/csv;charset=utf-8" });
     var a = document.createElement("a");
@@ -508,8 +525,10 @@ document.addEventListener("click", function(e){
   openCredit(Number(btn.dataset.depId), Number(btn.dataset.depAmount), btn.dataset.depName || "");
 });
 
+var CUR_TAB = "dash";
 document.querySelectorAll(".tab").forEach(function(t){
   t.addEventListener("click", function(){
+    CUR_TAB = t.dataset.tab;
     document.querySelectorAll(".tab").forEach(function(x){ x.classList.remove("active"); });
     document.querySelectorAll(".panel").forEach(function(x){ x.classList.remove("active"); });
     t.classList.add("active");
