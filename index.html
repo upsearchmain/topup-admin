@@ -234,6 +234,7 @@
   <div class="panel" id="panel-deps"><div class="section"><div class="section-head"><h2>입금 내역</h2></div><div class="tablewrap" id="t-deps"></div></div></div>
   <div class="panel" id="panel-tax">
     <div class="section"><div class="section-head"><h2>발행 대기</h2></div><div class="tablewrap" id="t-tax-pending"></div></div>
+    <div class="section"><div class="section-head"><h2>신청 접수 (입금 전)</h2><span class="badge-count">입금 확인 후 발행 대기로 이동</span></div><div class="tablewrap" id="t-tax-applied"></div></div>
     <div class="section"><div class="section-head"><h2>발행 완료</h2></div><div class="tablewrap" id="t-tax-done"></div></div>
   </div>
   <div class="panel" id="panel-pays"><div class="section"><div class="section-head"><h2>포인트 충전내역 (지급 기록)</h2></div><div class="tablewrap" id="t-pays"></div></div></div>
@@ -294,6 +295,7 @@ function appStatus(s){
 function depStatus(d){
   var c = { unmatched:chip("미매칭","#f4f4f5","#71717a"), matched:chip("매칭됨","#ecfdf3","#16803c",1),
     orphan:chip("신청 없음","#fef2f2","#dc2626",1), manual:chip("수동 확인","#fef2f2","#dc2626",1),
+    dismissed:chip("확인완료","#ecfdf3","#16803c"),
     refunded:chip("환불","#f4f4f5","#71717a") }[d.status] || esc(d.status);
   if (!d.parse_ok) c += " " + chip("파싱실패","#fef2f2","#dc2626");
   return c;
@@ -321,9 +323,12 @@ function appRow(a){
 }
 function depRow(d){
   var creditable = !d.matched_application_id && d.status !== "matched" && d.status !== "refunded" && d.amount > 0;
-  var action = creditable
-    ? '<button class="btn-xs btn-done credit-btn" data-dep-id="'+d.id+'" data-dep-amount="'+(d.amount||0)+'" data-dep-name="'+esc(d.depositor_name||"")+'">수동충전</button>'
-    : (d.matched_application_id ? '<span class="muted">app#'+d.matched_application_id+"</span>" : '<span class="muted">-</span>');
+  var needsReview = !d.matched_application_id && (d.status==="manual"||d.status==="orphan"||(d.status==="unmatched"&&!d.parse_ok));
+  var action = "";
+  if (creditable) action += '<button class="btn-xs btn-done credit-btn" data-dep-id="'+d.id+'" data-dep-amount="'+(d.amount||0)+'" data-dep-name="'+esc(d.depositor_name||"")+'">수동충전</button>';
+  if (needsReview) action += ' <button class="btn-xs btn-undo dismiss-btn" data-dep-id="'+d.id+'">확인완료</button>';
+  if (d.status==="dismissed") action += ' <button class="btn-xs btn-undo undismiss-btn" data-dep-id="'+d.id+'">되돌리기</button>';
+  if (!action) action = d.matched_application_id ? '<span class="muted">app#'+d.matched_application_id+"</span>" : '<span class="muted">-</span>';
   return "<tr><td class=\"muted\">#"+d.id+"</td><td>"+esc(d.bank||"-")+"</td><td class=\"strong\">"+esc(d.depositor_name||"?")+'</td><td class="num strong">'+
     (d.amount==null?"-":won(d.amount)+"원")+"</td><td>"+depStatus(d)+"</td><td>"+action+
     '</td><td class="muted">'+dt(d.received_at)+'</td><td class="raw">'+esc(String(d.raw_sms||"").slice(0,110))+"</td></tr>";
@@ -364,10 +369,13 @@ document.getElementById("credit-submit").addEventListener("click", function(){
     })
     .catch(function(e2){ btn.disabled=false; btn.textContent="충전 실행"; err.style.display="block"; err.textContent="네트워크 오류: "+e2.message; });
 });
-function taxRow(a, done){
-  var btn = done
+function taxRow(a, mode){
+  var btn = mode === true
     ? '<button class="btn-xs btn-undo" onclick="taxDone('+a.id+',true)">되돌리기</button>'
+    : mode === "applied"
+    ? '<span class="muted">입금 확인 후 발행</span>'
     : '<button class="btn-xs btn-done" onclick="taxDone('+a.id+',false)">발행완료 처리</button>';
+  var done = mode === true;
   return "<tr><td class=\"muted\">#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td class=\"strong\">"+esc(a.username)+"</td><td>"+taxChip(a.tax)+
     '</td><td class="raw">'+taxDetail(a.tax)+'</td><td class="num strong">'+won(a.amount_total)+"원</td><td>"+appStatus(a.status)+
     '</td><td class="muted">'+dt(done ? a.tax_done_at : a.created_at)+"</td><td>"+btn+"</td></tr>";
@@ -390,11 +398,12 @@ function render(){
   var stFilter = document.getElementById("appStatusFilter").value;
   var apps = DATA.applications.filter(function(a){ return (matchQ(a.username)||matchQ(a.depositor_name)) && (!stFilter || a.status===stFilter); });
   var pays = DATA.payouts.filter(function(p){ return matchQ(p.username); });
-  var manual = deposits.filter(function(d){ return d.status==="manual"||d.status==="orphan"||!d.parse_ok; });
+  var manual = deposits.filter(function(d){ return d.status==="manual"||d.status==="orphan"||(d.status==="unmatched"&&!d.parse_ok); });
   var waiting = apps.filter(function(a){ return a.status==="pending"||a.status==="partial"||a.status==="matched"; });
   var taxAll = apps.filter(function(a){ return a.tax; });
   // 발행 대기는 입금이 완료되어 매칭된 건만 (미입금 신청은 발행 대상 아님)
   var taxPending = taxAll.filter(function(a){ return !a.tax_done && (a.status === "paid" || a.status === "matched"); });
+  var taxApplied = taxAll.filter(function(a){ return !a.tax_done && (a.status === "pending" || a.status === "partial"); });
   var taxDoneArr = taxAll.filter(function(a){ return a.tax_done; });
 
   document.getElementById("ts").textContent = new Date().toLocaleString("ko-KR",{timeZone:"Asia/Seoul"}) + " 기준, 30초마다 자동 새로고침";
@@ -424,6 +433,7 @@ function render(){
   table("t-done", appHead, doneApps.map(appRow), "충전 완료 건 없음", "기간을 넓혀 보세요");
   table("t-deps", depHead, deposits.map(depRow), "입금 없음", "기간을 넓혀 보세요");
   table("t-tax-pending", taxHead, taxPending.map(function(a){return taxRow(a,false);}), "발행 대기 없음");
+  table("t-tax-applied", taxHead, taxApplied.map(function(a){return taxRow(a,"applied");}), "입금 전 신청 없음", "충전 신청 시 입력한 발행 정보가 여기에 먼저 보여요");
   table("t-tax-done", taxHead, taxDoneArr.map(function(a){return taxRow(a,true);}), "발행 완료 내역 없음");
   table("t-pays", ["ID","신청","패널","아이디","포인트","방식","성공","시각"], pays.map(function(p){
     return "<tr><td class=\"muted\">#"+p.id+"</td><td class=\"muted\">app#"+p.application_id+"</td><td>"+panelChip(p.panel)+"</td><td class=\"strong\">"+esc(p.username)+
@@ -493,9 +503,9 @@ function downloadCsv(){
     "충전완료내역": toCsv(DATA.applications.filter(function(a){ return a.status === "paid"; }), ["ID","패널","아이디","입금자명","충전포인트","입금액","충전시각(KST)"], function(a){
       return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.paid_amount, dt(a.updated_at||a.created_at)];
     }),
-    "세금발행내역": toCsv(DATA.applications.filter(function(a){ return a.tax; }), ["ID","패널","아이디","종류","발행정보","금액","발행완료","신청시각(KST)"], function(a){
+    "세금발행내역": toCsv(DATA.applications.filter(function(a){ return a.tax; }), ["ID","패널","아이디","종류","발행정보","금액","입금상태","발행완료","신청시각(KST)"], function(a){
       var t = a.tax||{};
-      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, t.type==="cash_receipt"?"현금영수증":"세금계산서", t.type==="cash_receipt"?(t.phone||""):((t.company||"")+" "+(t.biz_number||"")+" "+(t.email||"")), a.amount_total, a.tax_done?"완료":"대기", dt(a.created_at)];
+      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, t.type==="cash_receipt"?"현금영수증":"세금계산서", t.type==="cash_receipt"?(t.phone||""):((t.company||"")+" "+(t.biz_number||"")+" "+(t.email||"")), a.amount_total, a.status, a.tax_done?"완료":"대기", dt(a.created_at)];
     }),
     "입금내역": toCsv(DATA.deposits, ["ID","은행","입금자","금액","상태","매칭신청ID","수신시각(KST)","문자원문"], function(d){
       return [d.id, d.bank, d.depositor_name, d.amount, d.status, d.matched_application_id, dt(d.received_at), d.raw_sms];
@@ -520,10 +530,22 @@ function downloadCsv(){
 }
 
 document.addEventListener("click", function(e){
-  var btn = e.target.closest ? e.target.closest(".credit-btn") : null;
-  if (!btn) return;
-  openCredit(Number(btn.dataset.depId), Number(btn.dataset.depAmount), btn.dataset.depName || "");
+  if (!e.target.closest) return;
+  var btn = e.target.closest(".credit-btn");
+  if (btn) { openCredit(Number(btn.dataset.depId), Number(btn.dataset.depAmount), btn.dataset.depName || ""); return; }
+  var dis = e.target.closest(".dismiss-btn");
+  if (dis) { dismissDep(Number(dis.dataset.depId), false); return; }
+  var und = e.target.closest(".undismiss-btn");
+  if (und) { dismissDep(Number(und.dataset.depId), true); return; }
 });
+function dismissDep(id, undo){
+  if (!undo && !confirm("#"+id+" 입금을 확인완료 처리할까요? 수동 확인 목록에서 사라집니다.")) return;
+  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ action:"dismiss_deposit", token: TOKEN, deposit_id: id, undo: undo }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d.relogin) { logout(); return; } if(!d.ok) alert("실패: "+(d.error||"")); load(); })
+    .catch(function(e2){ alert("네트워크 오류: "+e2.message); });
+}
 
 var CUR_TAB = "dash";
 document.querySelectorAll(".tab").forEach(function(t){
