@@ -317,9 +317,14 @@ function matchQ(str){
   return String(str||"").toLowerCase().indexOf(q) >= 0;
 }
 function appRow(a){
+  // 입금이 어떻게 들어왔든(금액 상이·타수단) 신청 기준으로 바로 지급할 수 있게 한다
+  var canCredit = a.status==="pending"||a.status==="partial"||a.status==="matched"||a.status==="expired";
+  var action = canCredit
+    ? '<button class="btn-xs btn-done app-credit-btn" data-app-id="'+a.id+'" data-app-panel="'+a.panel+'" data-app-user="'+esc(a.username)+'" data-app-points="'+(a.amount_supply||0)+'">수동충전</button>'
+    : '<span class="muted">-</span>';
   return "<tr><td class=\"muted\">#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td class=\"strong\">"+esc(a.username)+"</td><td>"+esc(a.depositor_name)+
     '</td><td class="num strong">'+won(a.amount_supply)+"P</td><td class=\"num\">"+won(a.amount_total)+'원</td><td class="num">'+won(a.paid_amount)+
-    "원</td><td>"+appStatus(a.status)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt(a.created_at)+"</td></tr>";
+    "원</td><td>"+appStatus(a.status)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt(a.created_at)+"</td><td>"+action+"</td></tr>";
 }
 function depRow(d){
   var creditable = !d.matched_application_id && d.status !== "matched" && d.status !== "refunded" && d.amount > 0;
@@ -423,7 +428,7 @@ function render(){
   document.getElementById("cnt-pays").textContent = pays.length;
 
   var depHead = ["ID","은행","입금자","금액","상태","매칭","수신","문자 원문"];
-  var appHead = ["ID","패널","아이디","입금자명","충전","입금 안내액","입금됨","상태","신청 시각"];
+  var appHead = ["ID","패널","아이디","입금자명","충전","입금 안내액","입금됨","상태","신청 시각","액션"];
   var taxHead = ["ID","패널","아이디","종류","발행 정보","금액","상태","시각","처리"];
 
   table("t-manual", depHead, manual.map(depRow), "수동 확인 건 없음", "전부 자동 처리되고 있어요");
@@ -537,7 +542,26 @@ document.addEventListener("click", function(e){
   if (dis) { dismissDep(Number(dis.dataset.depId), false); return; }
   var und = e.target.closest(".undismiss-btn");
   if (und) { dismissDep(Number(und.dataset.depId), true); return; }
+  var ab = e.target.closest(".app-credit-btn");
+  if (ab) { creditApp(ab); return; }
 });
+function creditApp(btn){
+  var id = Number(btn.dataset.appId);
+  var label = (btn.dataset.appPanel==="sh"?"소셜헬퍼":"팔로워샵")+" · "+btn.dataset.appUser;
+  var pts = Number(btn.dataset.appPoints);
+  if (!confirm("신청 #"+id+" ("+label+") 님에게 "+won(pts)+"P를 지급할까요?\n입금이 어떻게 들어왔든 신청 내용 기준으로 충전됩니다.")) return;
+  btn.disabled = true; btn.textContent = "처리 중…";
+  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ action:"credit_application", token: TOKEN, application_id: id }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.relogin) { logout(); return; }
+      if (!d.ok) alert("실패: "+(d.error||""));
+      else if (!d.paid) alert("지급 실패 — PP 응답 확인 필요:\n"+JSON.stringify(d.pay_error||{}).slice(0,300));
+      load();
+    })
+    .catch(function(e2){ alert("네트워크 오류: "+e2.message); load(); });
+}
 function dismissDep(id, undo){
   if (!undo && !confirm("#"+id+" 입금을 확인완료 처리할까요? 수동 확인 목록에서 사라집니다.")) return;
   fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
