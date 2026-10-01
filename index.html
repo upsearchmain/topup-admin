@@ -346,7 +346,7 @@
         <option value="matched">지급 대기</option>
         <option value="paid">충전 완료</option>
         <option value="expired">만료 (신청 후 미입금)</option>
-        <option value="canceled">취소</option>
+        <option value="canceled">취소 / 부분 입금 종료</option>
       </select>
     </div>
     <div class="tablewrap" id="t-apps"></div>
@@ -561,7 +561,8 @@ function won(n){ return Number(n||0).toLocaleString("ko-KR"); }
 function dt(s){ return s ? new Date(s).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",year:"2-digit",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "-"; }
 function chip(t,bg,c,dot){ return '<span class="chip" style="background:'+bg+';color:'+c+'">'+(dot?'<i></i>':'')+esc(t)+'</span>'; }
 function panelChip(p){ return p==="sh" ? chip("소셜헬퍼","#f4edfd","#5d00c8") : chip("팔로워샵","#eff6ff","#1a56db"); }
-function appStatus(s){
+function appStatus(s, paidAmount){
+  if (s === "canceled" && paidAmount > 0) return chip("부분 입금 종료","#f4f4f5","#71717a");
   return { pending:chip("입금 대기","#fefce8","#a16207",1), partial:chip("부분 입금","#fff7ed","#c2410c",1),
     matched:chip("지급 대기","#eff6ff","#0369a1",1), paid:chip("충전 완료","#ecfdf3","#16803c",1),
     expired:chip("만료","#f4f4f5","#71717a"), canceled:chip("취소","#f4f4f5","#71717a") }[s] || esc(s);
@@ -652,7 +653,7 @@ function appRow(a){
     : '<span class="muted">-</span>';
   return '<tr><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td><div class="strong">'+esc(a.username)+"</div>"+sub(esc(a.depositor_name))+
     "</td><td>"+kv([["충전",won(a.amount_supply)+"P","strong"],["입금 안내액",won(a.amount_total)+"원"],["입금됨",won(a.paid_amount)+"원"]])+
-    '</td><td class="st">'+appStatus(a.status)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt2(a.created_at)+'</td><td class="act">'+action+"</td></tr>";
+    '</td><td class="st">'+appStatus(a.status,a.paid_amount)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt2(a.created_at)+'</td><td class="act">'+action+"</td></tr>";
 }
 function depRow(d){
   var creditable = !d.matched_application_id && d.status !== "matched" && d.status !== "refunded" && d.amount > 0;
@@ -710,7 +711,7 @@ function taxRow(a, mode){
     : '<button class="btn-xs btn-done" onclick="taxDone('+a.id+',false)">발행완료 처리</button>';
   var done = mode === true;
   return '<tr><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td class="strong">'+esc(a.username)+'</td><td class="raw"><div>'+taxChip(a.tax)+"</div>"+
-    sub(taxDetail(a.tax, a.depositor_name))+'</td><td class="st"><div class="num strong">'+won(a.amount_total)+"원</div>"+sub(appStatus(a.status))+
+    sub(taxDetail(a.tax, a.depositor_name))+'</td><td class="st"><div class="num strong">'+won(a.amount_total)+"원</div>"+sub(appStatus(a.status,a.paid_amount))+
     '</td><td class="muted">'+dt2(done ? a.tax_done_at : a.created_at)+'</td><td class="act">'+btn+"</td></tr>";
 }
 var ICONS = {
@@ -1398,15 +1399,15 @@ function downloadCsv(){
   if (!DATA) return;
   var kst = new Date().toLocaleString("sv-SE",{timeZone:"Asia/Seoul"}).slice(0,10);
   var allFiles = {
-    "신청내역": toCsv(DATA.applications, ["ID","패널","아이디","입금자명","충전포인트","부가세","입금안내액","입금된금액","상태","세금신청","발행완료","신청시각(KST)"], function(a){
-      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.amount_vat, a.amount_total, a.paid_amount, a.status, a.tax?(a.tax.type==="cash_receipt"?"현금영수증":"세금계산서"):"", a.tax_done?"완료":"", dt(a.created_at)];
+    "신청내역": toCsv(DATA.applications, ["ID","패널","아이디","입금자명","충전포인트","부가세","입금안내액","입금된금액","상태","처리 구분","세금신청","발행완료","신청시각(KST)"], function(a){
+      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.amount_vat, a.amount_total, a.paid_amount, a.status, a.status==="canceled"&&a.paid_amount>0?"부분 입금 종료":"", a.tax?(a.tax.type==="cash_receipt"?"현금영수증":"세금계산서"):"", a.tax_done?"완료":"", dt(a.created_at)];
     }),
     "충전완료내역": toCsv(DATA.applications.filter(function(a){ return a.status === "paid"; }), ["ID","패널","아이디","입금자명","충전포인트","입금액","충전시각(KST)"], function(a){
       return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.paid_amount, dt(a.updated_at||a.created_at)];
     }),
-    "세금발행내역": toCsv(DATA.applications.filter(function(a){ return a.tax; }), ["ID","패널","아이디","종류","발행정보","금액","입금상태","발행완료","신청시각(KST)"], function(a){
+    "세금발행내역": toCsv(DATA.applications.filter(function(a){ return a.tax; }), ["ID","패널","아이디","종류","발행정보","금액","입금상태","처리 구분","입금된금액","발행완료","신청시각(KST)"], function(a){
       var t = a.tax||{};
-      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, t.type==="cash_receipt"?"현금영수증":"세금계산서", t.type==="cash_receipt"?((a.depositor_name?a.depositor_name+" / ":"")+(t.phone||"")):((t.company||"")+" "+(t.biz_number||"")+" "+(t.email||"")), a.amount_total, a.status, a.tax_done?"완료":"대기", dt(a.created_at)];
+      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, t.type==="cash_receipt"?"현금영수증":"세금계산서", t.type==="cash_receipt"?((a.depositor_name?a.depositor_name+" / ":"")+(t.phone||"")):((t.company||"")+" "+(t.biz_number||"")+" "+(t.email||"")), a.amount_total, a.status, a.status==="canceled"&&a.paid_amount>0?"부분 입금 종료":"", a.paid_amount, a.tax_done?"완료":"대기", dt(a.created_at)];
     }),
     "입금내역": toCsv(DATA.deposits, ["ID","은행","입금자","금액","상태","매칭신청ID","수신시각(KST)","문자원문"], function(d){
       return [d.id, d.bank, d.depositor_name, d.amount, d.status, d.matched_application_id, dt(d.received_at), d.raw_sms];
