@@ -85,23 +85,28 @@
 
   /* ── 테이블 ── */
   .tablewrap { overflow-x:auto; background:var(--card); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow-sm); }
-  /* 가로로 넘치는 표: 가려진 쪽 가장자리에 옅은 그림자 */
-  .tablewrap.more-l { box-shadow:var(--shadow-sm), inset 14px 0 12px -12px rgba(24,24,27,.22); }
-  .tablewrap.more-r { box-shadow:var(--shadow-sm), inset -14px 0 12px -12px rgba(24,24,27,.22); }
-  .tablewrap.more-l.more-r { box-shadow:var(--shadow-sm), inset 14px 0 12px -12px rgba(24,24,27,.22), inset -14px 0 12px -12px rgba(24,24,27,.22); }
-  table { width:100%; border-collapse:collapse; font-size:13px; min-width:800px; }
-  th { color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; text-align:left; padding:11px 14px; border-bottom:1px solid var(--border); white-space:nowrap; background:var(--card); }
-  td { padding:11px 14px; border-bottom:1px solid #f1f1f4; vertical-align:middle; white-space:nowrap; }
+  /* 표는 카드 폭 안에 들어간다: 긴 글은 줄을 바꾸고, 금액과 칩과 버튼만 한 줄로 둔다 */
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; text-align:left; padding:10px 10px; border-bottom:1px solid var(--border); word-break:keep-all; background:var(--card); }
+  td { padding:10px 10px; border-bottom:1px solid #f1f1f4; vertical-align:middle; word-break:keep-all; overflow-wrap:anywhere; }
+  th:first-child, td:first-child { padding-left:14px; }
+  /* 첫 칸은 ID: 번호 안에서는 줄을 바꾸지 않는다 (패널 칩은 아래로 내려갈 수 있다) */
+  td:first-child { overflow-wrap:normal; }
+  th:last-child, td:last-child { padding-right:14px; }
   tr:last-child td { border-bottom:0; }
   tbody tr { transition:background .1s; }
   tbody tr:hover { background:#fafafa; }
-  td.raw { white-space:normal; min-width:200px; width:300px; font-size:11.5px; color:var(--muted); line-height:1.5; word-break:keep-all; overflow-wrap:anywhere; }
-  td.period { white-space:normal; width:180px; min-width:180px; }
-  /* 처리 버튼 열은 표를 옆으로 넘겨도 항상 오른쪽에 보인다 */
-  th.act, td.act { position:sticky; right:0; z-index:1; background:var(--card); box-shadow:inset 1px 0 0 #f1f1f4; }
-  tbody tr:hover td.act { background:#fafafa; }
-  .tablewrap.more-r th.act, .tablewrap.more-r td.act { box-shadow:inset 1px 0 0 var(--border), -10px 0 12px -10px rgba(24,24,27,.28); }
-  .num { font-variant-numeric:tabular-nums; }
+  td.raw { min-width:180px; width:30%; font-size:11.5px; color:var(--muted); line-height:1.5; }
+  td.period { min-width:150px; }
+  td.act { white-space:nowrap; }
+  td .cl { display:none; }
+  td .sub { color:var(--faint); font-size:12px; font-weight:400; margin-top:2px; }
+  td .sub .chip { margin-top:2px; }
+  .dt { display:block; white-space:nowrap; }
+  .kv { display:inline-grid; grid-template-columns:auto auto; gap:1px 10px; align-items:baseline; }
+  .kv .k { color:var(--faint); font-size:11.5px; font-weight:500; white-space:nowrap; }
+  .kv .v { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .num { font-variant-numeric:tabular-nums; white-space:nowrap; }
   .strong { font-weight:600; }
   .muted { color:var(--faint); font-size:12px; }
   .empty { padding:34px 16px; color:var(--faint); font-size:13px; text-align:center; }
@@ -189,6 +194,29 @@
   .refund-amount-warning { display:none; color:var(--danger); font-size:12px; font-weight:600; margin-top:5px; }
   .refund-amount-warning.show { display:block; }
 
+  /* 태블릿, 휴대폰: 표의 한 줄을 카드 한 장으로. 칸 이름은 왼쪽, 값은 오른쪽, 상태는 위, 처리 버튼은 아래 */
+  @media (max-width:1023px){
+    .tablewrap.has-rows { overflow:visible; background:none; border:0; border-radius:0; box-shadow:none; }
+    .tablewrap.has-rows table, .tablewrap.has-rows tbody { display:block; width:100%; }
+    .tablewrap.has-rows thead { display:none; }
+    .tablewrap.has-rows tr { display:flex; flex-direction:column; background:var(--card); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow-sm); padding:4px 14px; margin-bottom:10px; }
+    .tablewrap.has-rows tr:last-child { margin-bottom:0; }
+    .tablewrap.has-rows tbody tr:hover { background:var(--card); }
+    .tablewrap.has-rows td { display:grid; grid-template-columns:minmax(76px,32%) minmax(0,1fr); gap:12px; align-items:start; width:auto; min-width:0; padding:8px 0; border-bottom:1px solid #f1f1f4; }
+    .tablewrap.has-rows td:last-child { border-bottom:0; }
+    .tablewrap.has-rows td .cl { display:block; color:var(--muted); font-size:11.5px; font-weight:600; line-height:1.6; word-break:keep-all; }
+    .tablewrap.has-rows td .cv { min-width:0; text-align:right; }
+    .tablewrap.has-rows td.st { order:-1; }
+    .tablewrap.has-rows td.raw { grid-template-columns:minmax(0,1fr); gap:3px; }
+    .tablewrap.has-rows td.raw .cv { text-align:left; }
+    .tablewrap.has-rows td.btns { order:99; display:block; padding:10px 0 8px; border-bottom:0; border-top:1px solid #f1f1f4; }
+    .tablewrap.has-rows td.btns .cl { display:none; }
+    .tablewrap.has-rows td.btns .cv { display:flex; flex-wrap:wrap; gap:6px; text-align:left; }
+    .tablewrap.has-rows td.btns .btn-xs { flex:1 1 0; min-width:max-content; min-height:36px; }
+    .tablewrap.has-rows td.btns .cv > span { flex:1 1 100%; }
+    .tablewrap.has-rows .dt { display:inline; }
+    .tablewrap.has-rows .dt + .dt { margin-left:5px; }
+  }
   @media (max-width:760px){
     .topbar { position:static; }
     .topbar-inner { padding:10px 16px; gap:8px; }
@@ -198,11 +226,6 @@
     input[type="search"] { width:100%; min-width:120px; }
     .btn { padding:0 12px; }
     .editor-actions .btn { flex:1 1 auto; justify-content:center; }
-    td.act { white-space:normal; width:1%; }
-    td.act .btn-xs { display:block; width:100%; }
-    td.act > span { white-space:nowrap; }
-    td.act .btn-xs + .btn-xs { margin-top:6px; }
-    td.raw { min-width:200px; width:240px; }
     .userchip { margin-left:auto; }
     .wrap { padding:18px 16px 60px; }
     .editor-grid, .editor-fields { grid-template-columns:1fr; }
@@ -563,23 +586,48 @@ function table(el, head, rows, emptyTitle, emptySub){
   wrap.innerHTML = rows.length
     ? "<table><thead><tr>"+head.map(function(h){return "<th>"+h+"</th>";}).join("")+"</tr></thead><tbody>"+rows.join("")+"</tbody></table>"
     : '<div class="empty"><b>'+emptyTitle+"</b>"+(emptySub||"")+"</div>";
-  // 처리 버튼 열(td.act)의 머리칸도 같이 오른쪽에 고정한다
-  var act = wrap.querySelector("tbody td.act");
-  if (act) wrap.querySelectorAll("thead th")[act.cellIndex].classList.add("act");
-  updateEdges(wrap);
+  wrap.classList.toggle("has-rows", rows.length > 0);
+  // 좁은 화면에서는 줄마다 카드가 되므로, 칸마다 열 이름(.cl)과 값(.cv)을 나눠 둔다
+  wrap.querySelectorAll("tbody tr").forEach(function(tr){
+    Array.prototype.forEach.call(tr.cells, function(td, i){
+      var v = document.createElement("div");
+      v.className = "cv";
+      while (td.firstChild) v.appendChild(td.firstChild);
+      var l = document.createElement("span");
+      l.className = "cl";
+      l.setAttribute("aria-hidden", "true");
+      l.textContent = head[i] || "";
+      td.appendChild(l);
+      td.appendChild(v);
+      if (td.classList.contains("act") && v.querySelector("button")) td.classList.add("btns");
+    });
+  });
 }
-// 가로 스크롤 영역(표, 탭)에 가려진 쪽이 있는지 표시: more-l, more-r
+// 같은 칸에 묶은 값: 위는 주값, 아래는 보조값
+function sub(v){ return '<div class="sub">'+v+"</div>"; }
+// 이름이 붙은 금액 묶음: [["충전","1,000P"], ...]
+function kv(pairs){
+  return '<div class="kv">'+pairs.map(function(p){ return '<span class="k">'+p[0]+'</span><span class="v'+(p[2]?" "+p[2]:"")+'">'+p[1]+"</span>"; }).join("")+"</div>";
+}
+// 표 안 시각은 날짜와 시간을 두 줄로
+function dt2(s){
+  if (!s) return "-";
+  var d = new Date(s);
+  return '<span class="dt">'+d.toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul",year:"2-digit",month:"2-digit",day:"2-digit"})+'</span> <span class="dt">'+
+    d.toLocaleTimeString("ko-KR",{timeZone:"Asia/Seoul",hour:"2-digit",minute:"2-digit"})+"</span>";
+}
+// 가로 스크롤 영역(탭)에 가려진 쪽이 있는지 표시: more-l, more-r
 function updateEdges(el){
   var max = el.scrollWidth - el.clientWidth;
   el.classList.toggle("more-l", max > 1 && el.scrollLeft > 1);
   el.classList.toggle("more-r", max > 1 && el.scrollLeft < max - 1);
 }
 function updateAllEdges(){
-  document.querySelectorAll(".tablewrap, .tabs").forEach(updateEdges);
+  document.querySelectorAll(".tabs").forEach(updateEdges);
 }
 document.addEventListener("scroll", function(e){
   var t = e.target;
-  if (t.classList && (t.classList.contains("tablewrap") || t.classList.contains("tabs"))) updateEdges(t);
+  if (t.classList && t.classList.contains("tabs")) updateEdges(t);
 }, true);
 window.addEventListener("resize", updateAllEdges);
 // 배지 숫자 출력. approx=true면 "필터 결과가 더 있을 수 있음"을 뜻하는 + 표시.
@@ -602,9 +650,9 @@ function appRow(a){
   var action = canCredit
     ? '<button class="btn-xs btn-done app-credit-btn" data-app-id="'+a.id+'" data-app-panel="'+a.panel+'" data-app-user="'+esc(a.username)+'" data-app-points="'+(a.amount_supply||0)+'">수동충전</button>'
     : '<span class="muted">-</span>';
-  return "<tr><td class=\"muted\">#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td class=\"strong\">"+esc(a.username)+"</td><td>"+esc(a.depositor_name)+
-    '</td><td class="num strong">'+won(a.amount_supply)+"P</td><td class=\"num\">"+won(a.amount_total)+'원</td><td class="num">'+won(a.paid_amount)+
-    "원</td><td>"+appStatus(a.status)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt(a.created_at)+"</td><td class=\"act\">"+action+"</td></tr>";
+  return '<tr><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td><div class="strong">'+esc(a.username)+"</div>"+sub(esc(a.depositor_name))+
+    "</td><td>"+kv([["충전",won(a.amount_supply)+"P","strong"],["입금 안내액",won(a.amount_total)+"원"],["입금됨",won(a.paid_amount)+"원"]])+
+    '</td><td class="st">'+appStatus(a.status)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt2(a.created_at)+'</td><td class="act">'+action+"</td></tr>";
 }
 function depRow(d){
   var creditable = !d.matched_application_id && d.status !== "matched" && d.status !== "refunded" && d.amount > 0;
@@ -614,9 +662,9 @@ function depRow(d){
   if (needsReview) action += ' <button class="btn-xs btn-undo dismiss-btn" data-dep-id="'+d.id+'">확인완료</button>';
   if (d.status==="dismissed") action += ' <button class="btn-xs btn-undo undismiss-btn" data-dep-id="'+d.id+'">되돌리기</button>';
   if (!action) action = d.matched_application_id ? '<span class="muted">app#'+d.matched_application_id+"</span>" : '<span class="muted">-</span>';
-  return "<tr><td class=\"muted\">#"+d.id+"</td><td>"+esc(d.bank||"-")+"</td><td class=\"strong\">"+esc(d.depositor_name||"?")+'</td><td class="num strong">'+
-    (d.amount==null?"-":won(d.amount)+"원")+"</td><td>"+depStatus(d)+"</td><td class=\"act\">"+action+
-    '</td><td class="muted">'+dt(d.received_at)+'</td><td class="raw">'+esc(String(d.raw_sms||"").slice(0,110))+"</td></tr>";
+  return '<tr><td class="muted">#'+d.id+'</td><td><div class="strong">'+esc(d.depositor_name||"?")+"</div>"+sub(esc(d.bank||"-"))+'</td><td class="num strong">'+
+    (d.amount==null?"-":won(d.amount)+"원")+'</td><td class="st">'+depStatus(d)+'</td><td class="act">'+action+
+    '</td><td class="muted">'+dt2(d.received_at)+'</td><td class="raw">'+esc(String(d.raw_sms||"").slice(0,110))+"</td></tr>";
 }
 
 var CREDIT_DEP = null;
@@ -661,9 +709,9 @@ function taxRow(a, mode){
     ? '<span class="muted">입금 확인 후 발행</span>'
     : '<button class="btn-xs btn-done" onclick="taxDone('+a.id+',false)">발행완료 처리</button>';
   var done = mode === true;
-  return "<tr><td class=\"muted\">#"+a.id+"</td><td>"+panelChip(a.panel)+"</td><td class=\"strong\">"+esc(a.username)+"</td><td>"+taxChip(a.tax)+
-    '</td><td class="raw">'+taxDetail(a.tax, a.depositor_name)+'</td><td class="num strong">'+won(a.amount_total)+"원</td><td>"+appStatus(a.status)+
-    '</td><td class="muted">'+dt(done ? a.tax_done_at : a.created_at)+"</td><td class=\"act\">"+btn+"</td></tr>";
+  return '<tr><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td class="strong">'+esc(a.username)+'</td><td class="raw"><div>'+taxChip(a.tax)+"</div>"+
+    sub(taxDetail(a.tax, a.depositor_name))+'</td><td class="st"><div class="num strong">'+won(a.amount_total)+"원</div>"+sub(appStatus(a.status))+
+    '</td><td class="muted">'+dt2(done ? a.tax_done_at : a.created_at)+'</td><td class="act">'+btn+"</td></tr>";
 }
 var ICONS = {
   doc:'<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>',
@@ -720,9 +768,9 @@ function render(){
   setCnt("cnt-tax",  appFil ? taxPending.length : num(T.tax_pending, taxPending.length), appFil && appCut);
   setCnt("cnt-pays", qv     ? pays.length     : num(T.payouts, pays.length),          qv && payCut);
 
-  var depHead = ["ID","은행","입금자","금액","상태","매칭","수신","문자 원문"];
-  var appHead = ["ID","패널","아이디","입금자명","충전","입금 안내액","입금됨","상태","신청 시각","액션"];
-  var taxHead = ["ID","패널","아이디","종류","발행 정보","금액","상태","시각","처리"];
+  var depHead = ["ID","입금자 / 은행","금액","상태","매칭","수신","문자 원문"];
+  var appHead = ["ID / 패널","아이디 / 입금자명","금액","상태","신청 시각","액션"];
+  var taxHead = ["ID / 패널","아이디","종류 / 발행 정보","금액 / 상태","시각","처리"];
 
   table("t-manual", depHead, manual.map(depRow), "수동 확인 건 없음", "전부 자동 처리되고 있어요");
   table("t-waiting", appHead, waiting.map(appRow), "진행 중인 신청 없음");
@@ -733,10 +781,10 @@ function render(){
   table("t-tax-pending", taxHead, taxPending.map(function(a){return taxRow(a,false);}), "발행 대기 없음");
   table("t-tax-applied", taxHead, taxApplied.map(function(a){return taxRow(a,"applied");}), "입금 전 신청 없음", "충전 신청 시 입력한 발행 정보가 여기에 먼저 보여요");
   table("t-tax-done", taxHead, taxDoneArr.map(function(a){return taxRow(a,true);}), "발행 완료 내역 없음");
-  table("t-pays", ["ID","신청","패널","아이디","포인트","방식","성공","시각"], pays.map(function(p){
-    return "<tr><td class=\"muted\">#"+p.id+"</td><td class=\"muted\">app#"+p.application_id+"</td><td>"+panelChip(p.panel)+"</td><td class=\"strong\">"+esc(p.username)+
-      '</td><td class="num strong">'+won(p.points)+"P</td><td>"+(p.method==="manual"?chip("수동 대기","#fefce8","#a16207"):chip("자동(API)","#f4edfd","#5d00c8"))+"</td><td>"+
-      (p.succeeded?"✅":"⏳")+'</td><td class="muted">'+dt(p.created_at)+"</td></tr>";
+  table("t-pays", ["ID / 패널","신청","아이디","포인트","방식","성공","시각"], pays.map(function(p){
+    return '<tr><td class="muted">#'+p.id+" "+panelChip(p.panel)+'</td><td class="muted">app#'+p.application_id+'</td><td class="strong">'+esc(p.username)+
+      '</td><td class="num strong">'+won(p.points)+'P</td><td class="st">'+(p.method==="manual"?chip("수동 대기","#fefce8","#a16207"):chip("자동(API)","#f4edfd","#5d00c8"))+"</td><td>"+
+      (p.succeeded?"✅":"⏳")+'</td><td class="muted">'+dt2(p.created_at)+"</td></tr>";
   }), "지급 없음");
 }
 
@@ -814,19 +862,19 @@ function catalogButtons(entity, id){
 function renderCatalog(){
   if (!CATALOG_DATA) return;
   var statusRows = CATALOG_DATA.service_status.map(function(s){
-    return '<tr><td class="num strong">'+s.service_id+'</td><td>'+(s.orderable?chip("주문 가능","#ecfdf3","#16803c",1):chip("점검 중","#fef2f2","#dc2626",1))+
-      '</td><td class="raw">'+esc(s.reason||"-")+'</td><td class="muted">'+dt(s.started_at)+'</td><td class="muted">'+dt(s.updated_at)+'</td><td>'+esc(s.updated_by||"-")+'</td><td class="act">'+catalogButtons("service_status",s.service_id)+'</td></tr>';
+    return '<tr><td class="num strong">'+s.service_id+'</td><td class="st">'+(s.orderable?chip("주문 가능","#ecfdf3","#16803c",1):chip("점검 중","#fef2f2","#dc2626",1))+
+      '</td><td class="raw">'+esc(s.reason||"-")+'</td><td class="muted">'+dt2(s.started_at)+'</td><td class="muted">'+dt2(s.updated_at)+'</td><td>'+esc(s.updated_by||"-")+'</td><td class="act">'+catalogButtons("service_status",s.service_id)+'</td></tr>';
   });
   var logRows = CATALOG_DATA.check_logs.map(function(l){
-    return '<tr><td class="muted">#'+l.id+'</td><td class="num strong">'+l.service_id+'</td><td class="raw">'+esc(l.note)+'</td><td class="muted">'+dt(l.completed_at)+'</td><td class="act">'+catalogButtons("check_logs",l.id)+'</td></tr>';
+    return '<tr><td class="muted">#'+l.id+'</td><td class="num strong">'+l.service_id+'</td><td class="raw">'+esc(l.note)+'</td><td class="muted">'+dt2(l.completed_at)+'</td><td class="act">'+catalogButtons("check_logs",l.id)+'</td></tr>';
   });
   var warningRows = CATALOG_DATA.category_warnings.map(function(w){
     var lines = Array.isArray(w.contents) ? w.contents : [];
-    return '<tr><td class="num strong">'+w.category_id+'</td><td>'+esc(w.category_name||"-")+'</td><td class="strong">'+esc(w.title)+'</td><td class="raw">'+lines.map(esc).join("<br>")+'</td><td class="muted">'+dt(w.updated_at)+'</td><td class="act">'+catalogButtons("category_warnings",w.category_id)+'</td></tr>';
+    return '<tr><td class="num strong">'+w.category_id+'</td><td>'+esc(w.category_name||"-")+'</td><td class="strong">'+esc(w.title)+'</td><td class="raw">'+lines.map(esc).join("<br>")+'</td><td class="muted">'+dt2(w.updated_at)+'</td><td class="act">'+catalogButtons("category_warnings",w.category_id)+'</td></tr>';
   });
   var noticeRows = CATALOG_DATA.notices.map(function(n){
     var preview = String(n.body||"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,120);
-    return '<tr><td class="muted">#'+n.id+'</td><td class="strong">'+esc(n.title)+'</td><td>'+esc(n.platform||"-")+'</td><td>'+(n.pinned?chip("고정","#f4edfd","#5d00c8"):chip("일반","#f4f4f5","#62626b"))+'</td><td class="raw">'+esc(preview||"-")+'</td><td class="muted">'+dt(n.published_at)+'</td><td class="muted">'+dt(n.expires_at)+'</td><td class="act">'+catalogButtons("notices",n.id)+'</td></tr>';
+    return '<tr><td class="muted">#'+n.id+'</td><td class="strong">'+esc(n.title)+'</td><td>'+esc(n.platform||"-")+'</td><td class="st">'+(n.pinned?chip("고정","#f4edfd","#5d00c8"):chip("일반","#f4f4f5","#62626b"))+'</td><td class="raw">'+esc(preview||"-")+'</td><td class="muted">'+dt2(n.published_at)+'</td><td class="muted">'+dt2(n.expires_at)+'</td><td class="act">'+catalogButtons("notices",n.id)+'</td></tr>';
   });
   table("t-service-status", ["서비스 ID","상태","사유","시작","수정","수정자","처리"], statusRows, "등록된 점검 상태 없음");
   table("t-check-logs", ["ID","서비스 ID","내용","완료","처리"], logRows, "등록된 점검 이력 없음");
@@ -931,23 +979,23 @@ function renderCoupons(){
   var ruleRows = (COUPON_DATA.bonus_rules||[]).map(function(r){
     var valueType = Number(r.rate) > 0 ? "rate" : "flat";
     var value = valueType === "rate" ? r.rate : r.flat;
-    return '<tr><td class="muted">#'+esc(r.id)+'</td><td>'+esc(r.kind)+'</td><td>'+esc(r.layer)+'</td><td class="num strong">'+esc(value)+
-      (valueType==="rate"?" (정률)":"P (정액)")+'</td><td class="num">'+esc(r.priority)+'</td><td>'+(r.exclusive?chip("배제","#f4edfd","#5d00c8"):chip("중첩","#f4f4f5","#62626b"))+
-      '</td><td class="num">'+(r.cap==null?"-":esc(r.cap)+"P")+'</td><td class="num">'+esc(r.min_charge_amount)+"P</td><td class=\"muted period\">"+dt(r.starts_at)+" ~ "+dt(r.ends_at)+
-      '</td><td class="raw">'+esc(JSON.stringify(r.conditions||{}))+'</td><td>'+(r.active?chip("활성","#ecfdf3","#16803c",1):chip("중지","#f4f4f5","#62626b"))+
-      '</td><td class="act">'+couponButtons("bonus_rules",r.id)+"</td></tr>";
+    return '<tr><td class="muted">#'+esc(r.id)+"</td><td>"+esc(r.kind)+sub(esc(r.layer))+"</td><td>"+
+      kv([["값",esc(value)+(valueType==="rate"?" (정률)":"P (정액)"),"strong"],["우선순위",esc(r.priority)]])+'</td><td class="st">'+
+      (r.active?chip("활성","#ecfdf3","#16803c",1):chip("중지","#f4f4f5","#62626b"))+" "+(r.exclusive?chip("배제","#f4edfd","#5d00c8"):chip("중첩","#f4f4f5","#62626b"))+
+      "</td><td>"+kv([["상한",r.cap==null?"-":esc(r.cap)+"P"],["최소충전",esc(r.min_charge_amount)+"P"]])+'</td><td class="muted period">'+dt(r.starts_at)+" ~"+sub(dt(r.ends_at))+
+      '</td><td class="raw">'+esc(JSON.stringify(r.conditions||{}))+'</td><td class="act">'+couponButtons("bonus_rules",r.id)+"</td></tr>";
   });
   var couponRows = (COUPON_DATA.coupons||[]).map(function(c){
     return '<tr><td class="muted">#'+esc(c.id)+'</td><td class="strong">'+esc(c.code)+'</td><td class="muted">#'+esc(c.rule_id)+'</td><td class="num">'+
       (c.max_redemptions==null?"제한 없음":esc(c.max_redemptions))+'</td><td class="num">'+(c.per_user_limit==null?"제한 없음":esc(c.per_user_limit))+
-      '</td><td>'+(c.active?chip("활성","#ecfdf3","#16803c",1):chip("중지","#f4f4f5","#62626b"))+'</td><td class="act">'+couponButtons("coupons",c.id)+"</td></tr>";
+      '</td><td class="st">'+(c.active?chip("활성","#ecfdf3","#16803c",1):chip("중지","#f4f4f5","#62626b"))+'</td><td class="act">'+couponButtons("coupons",c.id)+"</td></tr>";
   });
   var grantRows = (COUPON_DATA.coupon_grants||[]).map(function(g){
-    return '<tr><td class="muted">#'+esc(g.id)+'</td><td class="muted">#'+esc(g.coupon_id)+'</td><td class="strong">'+esc(g.username)+'</td><td>'+
-      (g.status==="held"?chip("대기","#fefce8","#a16207",1):chip(esc(g.status),"#eff6ff","#0369a1",1))+'</td><td class="muted">'+dt(g.granted_at)+
+    return '<tr><td class="muted">#'+esc(g.id)+'</td><td class="muted">#'+esc(g.coupon_id)+'</td><td class="strong">'+esc(g.username)+'</td><td class="st">'+
+      (g.status==="held"?chip("대기","#fefce8","#a16207",1):chip(esc(g.status),"#eff6ff","#0369a1",1))+'</td><td class="muted">'+dt2(g.granted_at)+
       '</td><td class="muted">'+(g.locked_topup_id==null?"-":"#"+esc(g.locked_topup_id))+'</td></tr>';
   });
-  table("t-bonus-rules", ["ID","종류","레이어","값","우선순위","배제","상한","최소충전","기간","조건","상태","처리"], ruleRows, "등록된 보너스 규칙 없음");
+  table("t-bonus-rules", ["ID","종류 / 레이어","값 / 우선순위","상태 / 배제","상한 / 최소충전","기간","조건","처리"], ruleRows, "등록된 보너스 규칙 없음");
   table("t-coupons", ["ID","코드","규칙 ID","전체 한도","회원별 한도","상태","처리"], couponRows, "등록된 쿠폰 없음");
   table("t-coupon-grants", ["ID","쿠폰 ID","회원","상태","발행","충전 ID"], grantRows, "등록된 지급대상 없음");
 }
