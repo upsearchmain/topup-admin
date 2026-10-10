@@ -522,12 +522,19 @@
 <script>
 var API = "https://imhxdysqwmpnzmionjio.supabase.co/functions/v1/admin";
 var CONTENT_API = API.replace(/\/admin$/, "/content-admin");
-var TOKEN = localStorage.getItem("topup_admin_token") || "";
+var TOKEN = "";
+try { TOKEN = sessionStorage.getItem("topup_admin_token") || ""; } catch (e) {}
+try { localStorage.removeItem("topup_admin_token"); } catch (e) {}
 try { localStorage.removeItem("topup_admin_key"); } catch (e) {} // 구 키 방식 폐기
 
 var DATA = null;
 var CATALOG_DATA = null;
 var COUPON_DATA = null;
+
+function adminPost(url, body){
+  return fetch(url, { method:"POST", headers:{"Content-Type":"application/json", Authorization:"Bearer "+TOKEN},
+    body:JSON.stringify(body), cache:"no-store", redirect:"error" });
+}
 
 function showLogin(msg){
   document.getElementById("loginOverlay").classList.add("show");
@@ -536,7 +543,8 @@ function showLogin(msg){
 }
 function hideLogin(){ document.getElementById("loginOverlay").classList.remove("show"); }
 function logout(){
-  localStorage.removeItem("topup_admin_token"); TOKEN = "";
+  TOKEN = "";
+  try { sessionStorage.removeItem("topup_admin_token"); } catch (e) {}
   document.getElementById("userchip").style.display = "none";
   showLogin();
 }
@@ -551,7 +559,7 @@ document.getElementById("loginForm").addEventListener("submit", function(e){
       btn.disabled = false; btn.textContent = "로그인";
       if (!d.ok) { showLogin(d.error || "로그인 실패"); return; }
       TOKEN = d.token;
-      try { localStorage.setItem("topup_admin_token", TOKEN); } catch (err) {}
+      try { sessionStorage.setItem("topup_admin_token", TOKEN); } catch (err) {}
       document.getElementById("login-err").style.display = "none";
       document.getElementById("login-pw").value = "";
       hideLogin(); setUser(d.user); load();
@@ -776,8 +784,7 @@ document.getElementById("credit-submit").addEventListener("click", function(){
   if (!confirm("["+(panel==="sh"?"소셜헬퍼":"팔로워샵")+"] "+username+" 계정에 "+won(points)+"P를 충전할까요?")) return;
   var btn = document.getElementById("credit-submit");
   btn.disabled = true; btn.textContent = "충전 중…";
-  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"manual_credit", token: TOKEN, deposit_id: CREDIT_DEP, panel: panel, username: username, points: points }) })
+  adminPost(API, { action:"manual_credit", deposit_id: CREDIT_DEP, panel: panel, username: username, points: points })
     .then(function(r){ return r.json(); })
     .then(function(d){
       btn.disabled = false; btn.textContent = "충전 실행";
@@ -910,9 +917,9 @@ function runLoyaltyMemberAction(action, button){
   button.disabled = true;
   loyaltyMemberMessage("처리 중입니다.", false);
   var payload = action === "kakao_friend_grant"
-    ? {action:"kakao_friend_grant", token:TOKEN, panel:"sh", username:username}
-    : {action:"phone_verify_manual", token:TOKEN, panel:"sh", username:username, phone:phone};
-  fetch(API, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)})
+    ? {action:"kakao_friend_grant", panel:"sh", username:username}
+    : {action:"phone_verify_manual", panel:"sh", username:username, phone:phone};
+  adminPost(API, payload)
     .then(function(response){ return response.json(); })
     .then(function(data){
       if (data.relogin) { logout(); return; }
@@ -935,7 +942,7 @@ document.getElementById("loyalty-member-lookup").addEventListener("click", async
   if (!username) { loyaltyMemberMessage("회원 아이디를 입력하세요.", true); return; }
   this.disabled = true;
   try {
-    var response = await fetch(API, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"loyalty_member_lookup", token:TOKEN, panel:"sh", username:username})});
+    var response = await adminPost(API, {action:"loyalty_member_lookup", panel:"sh", username:username});
     var data = await response.json();
     if (!response.ok) throw new Error(data.error || "조회 실패");
     loyaltyMemberMessage(data.member
@@ -984,7 +991,7 @@ function loadCatalog(successMessage, showWarning){
   if (!TOKEN) { showLogin(); return; }
   var panel = document.getElementById("catalog-panel").value;
   catalogMessage("콘텐츠를 불러오는 중입니다.", false);
-  fetch(CONTENT_API+"?token="+encodeURIComponent(TOKEN)+"&panel="+encodeURIComponent(panel))
+  fetch(CONTENT_API+"?panel="+encodeURIComponent(panel), {headers:{Authorization:"Bearer "+TOKEN}, cache:"no-store", redirect:"error"})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -998,8 +1005,7 @@ function loadCatalog(successMessage, showWarning){
 function saveCatalogEntity(entity, data, form){
   var panel = document.getElementById("catalog-panel").value;
   catalogMessage("저장 중입니다.", false);
-  fetch(CONTENT_API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"save", token:TOKEN, panel:panel, entity:entity, data:data }) })
+  adminPost(CONTENT_API, { action:"save", panel:panel, entity:entity, data:data })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1014,8 +1020,7 @@ function saveCatalogEntity(entity, data, form){
 function deleteCatalogEntity(entity, id){
   if (!confirm("선택한 콘텐츠를 삭제할까요?")) return;
   var panel = document.getElementById("catalog-panel").value;
-  fetch(CONTENT_API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"delete", token:TOKEN, panel:panel, entity:entity, entity_id:id }) })
+  adminPost(CONTENT_API, { action:"delete", panel:panel, entity:entity, entity_id:id })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1102,7 +1107,7 @@ function loadCoupons(successMessage, showWarning){
   if (!TOKEN) { showLogin(); return; }
   var panel = document.getElementById("coupon-panel").value;
   couponMessage("쿠폰 데이터를 불러오는 중입니다.", false);
-  fetch(CONTENT_API+"?token="+encodeURIComponent(TOKEN)+"&panel="+encodeURIComponent(panel))
+  fetch(CONTENT_API+"?panel="+encodeURIComponent(panel), {headers:{Authorization:"Bearer "+TOKEN}, cache:"no-store", redirect:"error"})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1116,8 +1121,7 @@ function loadCoupons(successMessage, showWarning){
 function saveCouponEntity(entity, data, form){
   var panel = document.getElementById("coupon-panel").value;
   couponMessage("저장 중입니다.", false);
-  fetch(CONTENT_API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"save", token:TOKEN, panel:panel, entity:entity, data:data }) })
+  adminPost(CONTENT_API, { action:"save", panel:panel, entity:entity, data:data })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1134,8 +1138,7 @@ function saveCouponEntity(entity, data, form){
 function deleteCouponEntity(entity, id){
   if (!confirm("선택한 쿠폰 데이터를 삭제할까요?")) return;
   var panel = document.getElementById("coupon-panel").value;
-  fetch(CONTENT_API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"delete", token:TOKEN, panel:panel, entity:entity, entity_id:id }) })
+  adminPost(CONTENT_API, { action:"delete", panel:panel, entity:entity, entity_id:id })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1357,8 +1360,7 @@ function loadRefundability(successMessage){
   readButton.disabled = true;
   readButton.textContent = "검산 중…";
   refundMessage("PP 실잔액과 원장 구성 요소를 검산하고 있습니다.", "");
-  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"read_refundability", token:TOKEN, panel:panel, username:username }) })
+  adminPost(API, { action:"read_refundability", panel:panel, username:username })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1411,13 +1413,12 @@ document.getElementById("refund-record-form").addEventListener("submit", functio
   submit.textContent = "기록 중…";
   var body = {
     action:"record_refund",
-    token:TOKEN,
     panel:document.getElementById("refund-panel").value,
     username:document.getElementById("refund-username").value.trim(),
     amount:Number(document.getElementById("refund-amount").value),
     idempotency_key:document.getElementById("refund-idempotency-key").value.trim()
   };
-  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) })
+  adminPost(API, body)
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1456,7 +1457,7 @@ function load(){
   if (!TOKEN) { showLogin(); return; }
   if (LOADING) return;                 // 느린 회선에서 30초 새로고침이 겹쳐 쌓이지 않게
   LOADING = true;
-  fetch(API+"?token="+encodeURIComponent(TOKEN)+rangeParams())
+  fetch(API+"?"+rangeParams().replace(/^&/, ""), {headers:{Authorization:"Bearer "+TOKEN}, cache:"no-store", redirect:"error"})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1482,8 +1483,7 @@ function refreshCurrent(){
 }
 function taxDone(id, undo){
   if (!undo && !confirm("#"+id+" 발행완료 처리할까요?")) return;
-  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ token: TOKEN, action: "tax_done", application_id: id, undo: undo }) })
+  adminPost(API, { action: "tax_done", application_id: id, undo: undo })
     .then(function(r){ return r.json(); })
     .then(function(d){ if (d.relogin) { logout(); return; } if(!d.ok) alert("실패: "+(d.error||"")); load(); })
     .catch(function(e){ alert("네트워크 오류: "+e.message); });
@@ -1564,7 +1564,7 @@ function payOutcomeText(d){
   return "지급이 끝나지 않았어요. 지급 대기에서 상태를 확인해 주세요.";
 }
 function postAdmin(body){
-  return fetch(API, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({ token: TOKEN }, body)) })
+  return adminPost(API, body)
     .then(function(r){ return r.json(); });
 }
 function linkDeposit(btn){
@@ -1620,8 +1620,7 @@ function creditApp(btn){
   var pts = Number(btn.dataset.appPoints);
   if (!confirm("신청 #"+id+" ("+label+") 님에게 "+won(pts)+"P를 지급할까요?\n입금이 어떻게 들어왔든 신청 내용 기준으로 충전됩니다.")) return;
   btn.disabled = true; btn.textContent = "처리 중…";
-  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"credit_application", token: TOKEN, application_id: id }) })
+  adminPost(API, { action:"credit_application", application_id: id })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.relogin) { logout(); return; }
@@ -1633,8 +1632,7 @@ function creditApp(btn){
 }
 function dismissDep(id, undo){
   if (!undo && !confirm("#"+id+" 입금을 확인완료 처리할까요? 수동 확인 목록에서 사라집니다.")) return;
-  fetch(API, { method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"dismiss_deposit", token: TOKEN, deposit_id: id, undo: undo }) })
+  adminPost(API, { action:"dismiss_deposit", deposit_id: id, undo: undo })
     .then(function(r){ return r.json(); })
     .then(function(d){ if (d.relogin) { logout(); return; } if(!d.ok) alert("실패: "+(d.error||"")); load(); })
     .catch(function(e2){ alert("네트워크 오류: "+e2.message); });
