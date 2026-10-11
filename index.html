@@ -1492,8 +1492,10 @@ function toCsv(rows, headers, pick){
   var lines = [headers.join(",")];
   rows.forEach(function(r){
     lines.push(pick(r).map(function(v){
-      v = String(v==null?"":v).replace(/"/g,'""');
-      return /[",\n]/.test(v) ? '"'+v+'"' : v;
+      v = String(v==null?"":v);
+      if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+      v = v.replace(/"/g,'""');
+      return /[",\r\n]/.test(v) ? '"'+v+'"' : v;
     }).join(","));
   });
   return "﻿" + lines.join("\r\n");
