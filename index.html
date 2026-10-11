@@ -1512,7 +1512,7 @@ function downloadCsv(){
     }),
     "세금발행내역": toCsv(DATA.applications.filter(function(a){ return a.tax; }), ["ID","패널","아이디","종류","발행정보","금액","입금상태","처리 구분","입금된금액","발행완료","신청시각(KST)"], function(a){
       var t = a.tax||{};
-      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, t.type==="cash_receipt"?"현금영수증":"세금계산서", t.type==="cash_receipt"?((a.depositor_name?a.depositor_name+" / ":"")+(t.phone||"")):((t.company||"")+" "+(t.biz_number||"")+" "+(t.email||"")), a.amount_total, a.status, a.status==="canceled"&&a.paid_amount>0?"부분 입금 종료":"", a.paid_amount, a.tax_done?"완료":"대기", dt(a.created_at)];
+      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, t.type==="cash_receipt"?"현금영수증":"세금계산서", t.type==="cash_receipt"?((a.depositor_name?a.depositor_name+" / ":"")+(t.phone||"")):[t.company,t.biz_number,t.email].filter(function(v){return v!=null&&String(v).trim()!=="";}).join(" "), a.amount_total, a.status, a.status==="canceled"&&a.paid_amount>0?"부분 입금 종료":"", a.paid_amount, a.tax_done?"완료":"대기", dt(a.created_at)];
     }),
     "입금내역": toCsv(DATA.deposits, ["ID","은행","입금자","금액","상태","매칭신청ID","수신시각(KST)","문자원문"], function(d){
       return [d.id, d.bank, d.depositor_name, d.amount, d.status, d.matched_application_id, dt(d.received_at), d.raw_sms];
