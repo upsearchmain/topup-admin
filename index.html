@@ -1493,7 +1493,7 @@ function toCsv(rows, headers, pick){
   rows.forEach(function(r){
     lines.push(pick(r).map(function(v){
       v = String(v==null?"":v);
-      if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+      if (/^(?:\s*[=+\-@＝]|[\t\r\n])/.test(v)) v = "'" + v;
       v = v.replace(/"/g,'""');
       return /[",\r\n]/.test(v) ? '"'+v+'"' : v;
     }).join(","));
