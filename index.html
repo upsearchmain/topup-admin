@@ -584,6 +584,7 @@ function appStatus(s, paidAmount){
     expired:chip("만료","#f4f4f5","#71717a"), canceled:chip("취소","#f4f4f5","#71717a") }[s] || esc(s);
 }
 function depStatus(d){
+  if (d.memo === "reversal_notice") return chip("입금 취소/정정 문자","#fef2f2","#dc2626",1);
   var c = { unmatched:chip("미매칭","#f4f4f5","#71717a"), matched:chip("매칭됨","#ecfdf3","#16803c",1),
     orphan:chip("신청 없음","#fef2f2","#dc2626",1), manual:chip("수동 확인","#fef2f2","#dc2626",1),
     dismissed:chip("확인완료","#ecfdf3","#16803c"),
@@ -740,7 +741,7 @@ function suggestApps(d){
   return out.slice(0,3);
 }
 function depRow(d){
-  var creditable = !d.matched_application_id && d.status !== "matched" && d.status !== "refunded" && d.amount > 0;
+  var creditable = d.memo !== "reversal_notice" && !d.matched_application_id && d.status !== "matched" && d.status !== "refunded" && d.amount > 0;
   var needsReview = !d.matched_application_id && (d.status==="manual"||d.status==="orphan"||(d.status==="unmatched"&&!d.parse_ok));
   var action = "";
   if (creditable) action += '<button class="btn-xs btn-done credit-btn" data-dep-id="'+d.id+'" data-dep-amount="'+(d.amount||0)+'" data-dep-name="'+esc(d.depositor_name||"")+'">수동충전</button>';
