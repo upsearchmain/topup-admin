@@ -267,7 +267,7 @@
   </span>
   <span class="field">
     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-    <input type="search" id="q" placeholder="아이디, 입금자명 검색">
+    <input type="search" id="q" placeholder="아이디, 입금자명, 번호(#768), 금액 검색">
   </span>
   <button class="btn btn-primary" id="csvBtn"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>CSV 내려받기</button>
   <button class="btn btn-outline" id="refreshBtn"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>새로고침</button>
@@ -356,10 +356,37 @@
         <option value="expired">만료 (신청 후 미입금)</option>
         <option value="canceled">취소 / 부분 입금 종료</option>
       </select>
+      <select id="appPanelFilter" aria-label="패널">
+        <option value="">전체 패널</option>
+        <option value="sh">소셜헬퍼</option>
+        <option value="fs">팔로워샵</option>
+      </select>
     </div>
     <div class="tablewrap" id="t-apps"></div>
   </div></div>
-  <div class="panel" id="panel-done"><div class="section"><div class="section-head"><h2>충전 완료내역</h2></div><div class="tablewrap" id="t-done"></div></div></div>
+  <div class="panel" id="panel-done"><div class="section"><div class="section-head"><h2>충전 완료내역</h2></div>
+    <div class="filterbar">
+      <select id="doneKind" aria-label="처리 방식">
+        <option value="">전체 방식</option>
+        <option value="auto">자동 매칭 (입금 문자)</option>
+        <option value="manual">수동 처리 (입금 연결·수동충전)</option>
+        <option value="nodep">입금 기록 없음</option>
+      </select>
+      <select id="donePanel" aria-label="패널">
+        <option value="">전체 패널</option>
+        <option value="sh">소셜헬퍼</option>
+        <option value="fs">팔로워샵</option>
+      </select>
+      <select id="doneSort" aria-label="기준 시각">
+        <option value="deposit">입금 시각 기준</option>
+        <option value="paid">충전 시각 기준</option>
+        <option value="created">신청 시각 기준</option>
+      </select>
+      <input type="date" id="doneFrom" aria-label="기준일 시작"> <span class="muted">~</span> <input type="date" id="doneTo" aria-label="기준일 끝">
+      <button class="btn-xs btn-undo" id="doneReset" type="button">초기화</button>
+    </div>
+    <p class="muted" id="done-note"></p>
+    <div class="tablewrap" id="t-done"></div></div></div>
   <div class="panel" id="panel-deps"><div class="section"><div class="section-head"><h2>입금 내역</h2></div><div class="tablewrap" id="t-deps"></div></div></div>
   <div class="panel" id="panel-tax">
     <div class="section"><div class="section-head"><h2>발행 대기</h2></div><div class="tablewrap" id="t-tax-pending"></div></div>
@@ -663,10 +690,10 @@ document.addEventListener("scroll", function(e){
 window.addEventListener("resize", updateAllEdges);
 // 배지 숫자 출력. approx=true면 "필터 결과가 더 있을 수 있음"을 뜻하는 + 표시.
 function num(v, fallback){ return (v == null ? fallback : v); }
-function setCnt(id, n, approx){
+function setCnt(id, n, approx, incomplete){
   var el = document.getElementById(id);
   if (!el) return;
-  var more = approx && n > 0;   // 0건이면 "0+"가 어색하므로 그냥 0
+  var more = incomplete || (approx && n > 0);   // 0건이면 "0+"가 어색하므로 그냥 0 (자료가 덜 왔으면 0+)
   el.textContent = more ? n + "+" : String(n);
   el.title = more ? "불러온 범위 안에서 센 값이에요. 기간을 좁히면 정확해져요." : "";
 }
@@ -675,13 +702,110 @@ function matchQ(str){
   if (!q) return true;
   return String(str||"").toLowerCase().indexOf(q) >= 0;
 }
+// 숫자 검색: "#768"·"768"은 번호(신청·입금·지급)와 정확히 같을 때, "11,000"·"11000"은 금액과 같을 때 찾는다.
+function qNumber(){
+  var q = document.getElementById("q").value.trim();
+  var m = /^#?\s*([0-9][0-9,]*)$/.exec(q);
+  return m ? Number(m[1].replace(/,/g, "")) : null;
+}
+function matchNum(values){
+  var n = qNumber();
+  if (n == null) return false;
+  for (var i = 0; i < values.length; i++) if (values[i] != null && Number(values[i]) === n) return true;
+  return false;
+}
+function matchApp(a){
+  if (matchQ(a.username) || matchQ(a.depositor_name)) return true;
+  if (qNumber() == null) return false;
+  var nums = [a.id, a.amount_total, a.amount_supply, a.paid_amount];
+  (DEPS_BY_APP[a.id]||[]).forEach(function(d){ nums.push(d.id, d.amount); });
+  (PAYS_BY_APP[a.id]||[]).forEach(function(p){ nums.push(p.id); });
+  return matchNum(nums);
+}
+// 숫자 검색일 때는 문자 원문(잔액 숫자 등)을 뒤지지 않는다: "768"이 잔액 361,768,944에 걸리지 않게
+function matchDep(d){
+  if (qNumber() != null) return matchNum([d.id, d.amount, d.matched_application_id]) || matchQ(d.depositor_name);
+  return matchQ(d.depositor_name) || matchQ(d.raw_sms);
+}
+function matchPay(p){ return matchQ(p.username) || matchNum([p.id, p.application_id, p.points]); }
 // 지급 대기(matched) 정리에 쓰는 보조 자료: 신청별 마지막 지급 기록, PP 지급 잠금, 이미 입금이 연결된 신청
-var PAYOUT_BY_APP = {}, LOCKED_APPS = {}, LINKED_APPS = {};
+// APP_BY_ID·DEPS_BY_APP·PAID_AT은 기간 밖 연결 행(DATA.related)까지 합쳐 만든다.
+// PAID_AT: 서버가 준 지급 확정 시각(재시도로 성공한 건도 정확) > 성공한 지급 기록 시각 > 신청 수정 시각
+var PAYOUT_BY_APP = {}, LOCKED_APPS = {}, LINKED_APPS = {}, APP_BY_ID = {}, DEPS_BY_APP = {}, PAID_AT = {}, PAYS_BY_APP = {};
 function indexSideData(){
-  PAYOUT_BY_APP = {}; LOCKED_APPS = {}; LINKED_APPS = {};
-  (DATA.payouts||[]).forEach(function(p){ if (!PAYOUT_BY_APP[p.application_id] || p.id > PAYOUT_BY_APP[p.application_id].id) PAYOUT_BY_APP[p.application_id] = p; });
+  PAYOUT_BY_APP = {}; LOCKED_APPS = {}; LINKED_APPS = {}; APP_BY_ID = {}; DEPS_BY_APP = {}; PAID_AT = {}; PAYS_BY_APP = {};
+  var rel = DATA.related || {};
+  var allPays = (DATA.payouts||[]).concat(rel.payouts||[]);
+  var allDeps = (DATA.deposits||[]).concat(rel.deposits||[]);
+  (DATA.applications||[]).concat(rel.applications||[]).forEach(function(a){ APP_BY_ID[a.id] = a; });
+  allPays.forEach(function(p){
+    if (!PAYOUT_BY_APP[p.application_id] || p.id > PAYOUT_BY_APP[p.application_id].id) PAYOUT_BY_APP[p.application_id] = p;
+    (PAYS_BY_APP[p.application_id] = PAYS_BY_APP[p.application_id] || []).push(p);
+    if (p.succeeded && (!PAID_AT[p.application_id] || Date.parse(p.created_at) > Date.parse(PAID_AT[p.application_id]))) PAID_AT[p.application_id] = p.created_at;
+  });
+  var confirmed = DATA.paid_at || {};
+  Object.keys(confirmed).forEach(function(id){ PAID_AT[id] = confirmed[id]; });
+  // 운영자 정리 건: PP 내역 대조로 찾은 지급은 PP 지급 시각, "PP에서 직접 지급함"은 시각을 모름(null)
+  // 정리 기록에 PP 지급 시각이 없으면(예전 기록 포함) 확정 시각은 정리한 때라 쓰지 않는다
+  allPays.forEach(function(p){
+    if (!p.succeeded) return;
+    if (p.pp_paid_at) PAID_AT[p.application_id] = p.pp_paid_at;
+    else if (p.closed_externally || p.resolution) PAID_AT[p.application_id] = null;
+  });
   (DATA.payment_locks||[]).forEach(function(id){ LOCKED_APPS[id] = true; });
-  (DATA.deposits||[]).forEach(function(d){ if (d.matched_application_id) LINKED_APPS[d.matched_application_id] = true; });
+  allDeps.forEach(function(d){
+    if (!d.matched_application_id) return;
+    LINKED_APPS[d.matched_application_id] = true;
+    (DEPS_BY_APP[d.matched_application_id] = DEPS_BY_APP[d.matched_application_id] || []).push(d);
+  });
+}
+// 충전완료 처리 방식: 입금 문자로 자동 매칭 / 운영자 연결·수동충전 / 입금 기록 없이 충전
+function doneKind(a){
+  var deps = DEPS_BY_APP[a.id] || [];
+  if (!deps.length) return "nodep";
+  var byOperator = deps.some(function(d){ return /^수동/.test(d.memo || ""); }) ||
+    (PAYS_BY_APP[a.id] || []).some(function(p){ return p.succeeded && p.by_operator; });
+  return byOperator ? "manual" : "auto";
+}
+// KST 날짜(YYYY-MM-DD): 매 행 toLocaleDateString은 느려서 9시간을 더한 UTC 날짜로 계산한다
+function kstDate(iso){
+  var t = Date.parse(iso || "");
+  return isNaN(t) ? "" : new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function doneRow(a){
+  var deps = (DEPS_BY_APP[a.id] || []).slice().sort(function(x,y){ return x.id - y.id; });
+  var kind = doneKind(a);
+  var depHtml = deps.length
+    ? deps.map(function(d){ return '<div>입금 #'+d.id+" "+won(d.amount)+"원 "+sub(dt(d.received_at))+"</div>"; }).join("")
+    : '<span class="warn-text">입금 기록 없음</span>';
+  var kindChip = kind === "auto" ? chip("자동 매칭","#f4edfd","#5d00c8") : kind === "manual" ? chip("수동 처리","#fefce8","#a16207") : chip("입금 기록 없음","#f4f4f5","#71717a");
+  var depAt = depositAt(a);
+  var times = kv([
+    ["입금", depAt ? dt(depAt) : "기록 없음", "strong"],
+    ["신청", dt(a.created_at) + (kind === "manual" && depAt && Date.parse(a.created_at) > Date.parse(depAt) ? " (처리 때 생성)" : "")],
+    ["충전", paidAt(a) ? dt(paidAt(a)) : "PP 직접 지급 (지급 시각 미상)"],
+  ]);
+  return '<tr><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td><div class="strong">'+esc(a.username)+"</div>"+sub(esc(a.depositor_name))+
+    "</td><td>"+kv([["충전",won(a.amount_supply)+"P","strong"],["입금됨",won(a.paid_amount)+"원"]])+
+    '</td><td class="raw">'+depHtml+'</td><td class="st">'+kindChip+" "+taxChip(a.tax)+
+    '</td><td>'+times+"</td></tr>";
+}
+// 충전 시각: 알 수 없으면(PP에서 직접 지급함) null. 지급 기록이 아예 없던 옛 신청만 수정 시각으로 대신한다.
+function paidAt(a){
+  if (Object.prototype.hasOwnProperty.call(PAID_AT, a.id)) return PAID_AT[a.id];
+  return a.updated_at || null;
+}
+// 은행 입금 시각: 연결된 입금 중 가장 이른 수신 시각(없으면 null)
+function depositAt(a){
+  var deps = DEPS_BY_APP[a.id] || [], best = null;
+  deps.forEach(function(d){ if (d.received_at && (!best || Date.parse(d.received_at) < Date.parse(best))) best = d.received_at; });
+  return best;
+}
+// 연결된 신청의 상태(입금내역 "매칭" 칸): 매칭됐는데 충전완료에 없는 이유가 바로 보이게
+function linkedAppLabel(id){
+  var a = APP_BY_ID[id];
+  if (!a) return '<span class="muted">app#'+id+"</span>";
+  return '<span class="muted">app#'+id+"</span> "+appStatus(a.status, a.paid_amount);
 }
 function appRow(a){
   var action;
@@ -747,7 +871,7 @@ function depRow(d){
   if (creditable) action += '<button class="btn-xs btn-done credit-btn" data-dep-id="'+d.id+'" data-dep-amount="'+(d.amount||0)+'" data-dep-name="'+esc(d.depositor_name||"")+'">수동충전</button>';
   if (needsReview) action += ' <button class="btn-xs btn-undo dismiss-btn" data-dep-id="'+d.id+'">확인완료</button>';
   if (d.status==="dismissed") action += ' <button class="btn-xs btn-undo undismiss-btn" data-dep-id="'+d.id+'">되돌리기</button>';
-  if (!action) action = d.matched_application_id ? '<span class="muted">app#'+d.matched_application_id+"</span>" : '<span class="muted">-</span>';
+  if (!action) action = d.matched_application_id ? linkedAppLabel(d.matched_application_id) : '<span class="muted">-</span>';
   if (creditable && d.status !== "dismissed") {
     var sugg = suggestApps(d);
     if (sugg.length) action += '<div class="sugg"><span class="sugg-title">이 신청에 연결</span>'+sugg.map(function(c){
@@ -819,14 +943,66 @@ var ICONS = {
 function statCard(k, v, icon, cls){
   return '<div class="stat"><div class="k">'+k+ICONS[icon]+'</div><div class="v '+(cls||"")+'">'+v+"</div></div>";
 }
+// 충전완료 목록: 기간 안 신청 + 기간 안 입금·지급에 연결된 기간 밖 신청 중 충전 완료된 것.
+// 정렬은 충전 시각(성공한 지급 시각) 최신순. 탭 필터: 방식·패널·충전일(KST).
+function doneList(){
+  var kind = document.getElementById("doneKind").value;
+  var panel = document.getElementById("donePanel").value;
+  var from = document.getElementById("doneFrom").value, to = document.getElementById("doneTo").value;
+  // 기준 시각(정렬·날짜 필터 공통, 최신 먼저). 기본은 은행 입금 시각: 수동충전은 처리할 때 신청이 새로 생겨
+  // 신청 시각이 입금보다 늦기 때문. 입금 기록이 없는 충전은 충전 시각으로 대신한다.
+  var sort = document.getElementById("doneSort").value;
+  var ms = function(iso){ var t = Date.parse(iso || ""); return isNaN(t) ? 0 : t; };
+  // 기준 시각을 모르는 행(입금 기록도 지급 시각도 없는 직접 지급 건)은 null: 맨 뒤로 보내고 날짜 필터에서는 뺀다.
+  var key = function(a){
+    if (sort === "created") return ms(a.created_at) || null;
+    var paid = paidAt(a) ? ms(paidAt(a)) : null;
+    if (sort === "deposit") { var d = depositAt(a); return d ? ms(d) : paid; }
+    return paid;
+  };
+  var unknown = 0;
+  var rows = Object.keys(APP_BY_ID).map(function(id){ return APP_BY_ID[id]; }).filter(function(a){
+    if (a.status !== "paid" || !matchApp(a)) return false;
+    if (panel && a.panel !== panel) return false;
+    if (kind && doneKind(a) !== kind) return false;
+    if (from || to) {
+      var k = key(a);
+      if (k == null) { unknown++; return false; }
+      var day = kstDate(new Date(k).toISOString());
+      if (from && day < from) return false;
+      if (to && day > to) return false;
+    }
+    return true;
+  });
+
+  rows = rows.map(function(a){ return { a: a, k: key(a) }; }).sort(function(x,y){
+    if (x.k == null || y.k == null) return x.k == null && y.k == null ? y.a.id - x.a.id : x.k == null ? 1 : -1;
+    return x.k < y.k ? 1 : x.k > y.k ? -1 : y.a.id - x.a.id;
+  }).map(function(r){ return r.a; });
+  var note = document.getElementById("done-note");
+  if (note) {
+    var range = document.getElementById("range").value;
+    var msgs = [];
+    if (DATA.related && DATA.related.complete === false) msgs.push("⚠ 연결 자료 일부를 불러오지 못해 목록이 빠졌을 수 있어요. 새로고침해 주세요.");
+    if ((from || to) && range !== "recent") msgs.push("날짜 필터는 위 조회 기간에 불러온 자료 안에서 찾아요. 기간 밖이면 위 조회 기간을 넓혀 주세요.");
+    if (unknown) msgs.push("기준 시각을 알 수 없는 " + unknown + "건(PP 직접 지급)은 날짜 필터에서 빠졌어요.");
+    note.textContent = msgs.join(" ");
+  }
+  return rows;
+}
 function render(){
   if (!DATA) return;
   var s = DATA.summary;
   var T = DATA.totals || {}, L = DATA.loaded || {};
-  var deposits = DATA.deposits.filter(function(d){ return matchQ(d.depositor_name)||matchQ(d.raw_sms); });
+  indexSideData();
+  var deposits = DATA.deposits.filter(matchDep);
   var stFilter = document.getElementById("appStatusFilter").value;
-  var apps = DATA.applications.filter(function(a){ return (matchQ(a.username)||matchQ(a.depositor_name)) && (!stFilter || a.status===stFilter); });
-  var pays = DATA.payouts.filter(function(p){ return matchQ(p.username); });
+  var panelFilter = document.getElementById("appPanelFilter").value;
+  // 상태·패널 필터는 신청 내역 탭에만 건다. 대시보드·세금 탭은 검색만 따른다.
+  var apps = DATA.applications.filter(matchApp);
+  var appsTab = apps.filter(function(a){ return (!stFilter || a.status===stFilter) && (!panelFilter || a.panel===panelFilter); });
+  var pays = DATA.payouts.filter(matchPay);
+  var doneRows = doneList();
   var manual = deposits.filter(function(d){ return d.status==="manual"||d.status==="orphan"||(d.status==="unmatched"&&!d.parse_ok); });
   var waiting = apps.filter(function(a){ return a.status==="pending"||a.status==="partial"||a.status==="matched"; });
   var taxAll = apps.filter(function(a){ return a.tax; });
@@ -849,18 +1025,18 @@ function render(){
     statCard("수동 확인 대기", manual.length+"건", "alert", manual.length?"danger":"ok") +
     statCard("발행 대기", taxPending.length+"건", "receipt", taxPending.length?"warn":"ok");
 
-  var doneApps = apps.filter(function(a){ return a.status === "paid"; });
+
   // 탭 배지: 검색·상태필터가 없으면 서버가 센 기간 내 전체 건수를 쓴다.
   // (예전엔 내려받은 배열 길이라 limit(=100)에 갇혀 100에서 멈췄음)
   var qv = document.getElementById("q").value.trim();
   var appCut = L.applications != null && T.applications != null && L.applications < T.applications;
   var depCut = L.deposits != null && T.deposits != null && L.deposits < T.deposits;
   var payCut = L.payouts != null && T.payouts != null && L.payouts < T.payouts;
-  var appFil = !!qv || !!stFilter;
-  setCnt("cnt-apps", appFil ? apps.length     : num(T.applications, apps.length),     appFil && appCut);
-  setCnt("cnt-done", appFil ? doneApps.length : num(T.done, doneApps.length),         appFil && appCut);
+  var appFil = !!qv || !!stFilter || !!panelFilter;
+  setCnt("cnt-apps", appFil ? appsTab.length  : num(T.applications, appsTab.length),  appFil && appCut);
+  setCnt("cnt-done", doneRows.length, false, !!(DATA.related && DATA.related.complete === false));
   setCnt("cnt-deps", qv     ? deposits.length : num(T.deposits, deposits.length),     qv && depCut);
-  setCnt("cnt-tax",  appFil ? taxPending.length : num(T.tax_pending, taxPending.length), appFil && appCut);
+  setCnt("cnt-tax",  qv ? taxPending.length : num(T.tax_pending, taxPending.length), qv && appCut);
   setCnt("cnt-pays", qv     ? pays.length     : num(T.payouts, pays.length),          qv && payCut);
 
   var depHead = ["ID","입금자 / 은행","금액","상태","매칭","수신","문자 원문"];
@@ -872,14 +1048,14 @@ function render(){
       (p.succeeded?"✅":"⏳"+(p.pp_error?'<div class="warn-text">'+esc(p.pp_error)+"</div>":""))+'</td><td class="muted">'+dt2(p.created_at)+"</td></tr>";
   };
   var taxRowFor = function(mode){ return function(a){ return taxRow(a, mode); }; };
-  indexSideData();
+  var doneHead = ["ID / 패널","아이디 / 입금자명","금액","연결 입금","방식","시각"];
   // 보이는 탭의 표만 그린다. 다른 탭은 탭을 누를 때 그린다.
   var TABLES = {
     "t-manual": [depHead, manual, depRow, "수동 확인 건 없음", "전부 자동 처리되고 있어요"],
     "t-waiting": [appHead, waiting, appRow, "진행 중인 신청 없음"],
     "t-taxpending": [taxHead, taxPending, taxRowFor(false), "발행 대기 없음"],
-    "t-apps": [appHead, apps, appRow, "신청 없음", "기간을 넓혀 보세요"],
-    "t-done": [appHead, doneApps, appRow, "충전 완료 건 없음", "기간을 넓혀 보세요"],
+    "t-apps": [appHead, appsTab, appRow, "신청 없음", "기간을 넓혀 보세요"],
+    "t-done": [doneHead, doneRows, doneRow, "충전 완료 건 없음", "필터나 기간을 넓혀 보세요"],
     "t-deps": [depHead, deposits, depRow, "입금 없음", "기간을 넓혀 보세요"],
     "t-tax-pending": [taxHead, taxPending, taxRowFor(false), "발행 대기 없음"],
     "t-tax-applied": [taxHead, taxApplied, taxRowFor("applied"), "입금 전 신청 없음", "충전 신청 시 입력한 발행 정보가 여기에 먼저 보여요"],
@@ -1508,8 +1684,12 @@ function downloadCsv(){
     "신청내역": toCsv(DATA.applications, ["ID","패널","아이디","입금자명","충전포인트","부가세","입금안내액","입금된금액","상태","처리 구분","세금신청","발행완료","신청시각(KST)"], function(a){
       return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.amount_vat, a.amount_total, a.paid_amount, a.status, a.status==="canceled"&&a.paid_amount>0?"부분 입금 종료":"", a.tax?(a.tax.type==="cash_receipt"?"현금영수증":"세금계산서"):"", a.tax_done?"완료":"", dt(a.created_at)];
     }),
-    "충전완료내역": toCsv(DATA.applications.filter(function(a){ return a.status === "paid"; }), ["ID","패널","아이디","입금자명","충전포인트","입금액","충전시각(KST)"], function(a){
-      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.paid_amount, dt(a.updated_at||a.created_at)];
+    "충전완료내역": toCsv(doneList(), ["ID","패널","아이디","입금자명","충전포인트","입금액","연결 입금번호","처리 방식","입금시각(KST)","신청시각(KST)","충전시각(KST)"], function(a){
+      var kind = doneKind(a);
+      var depAt = depositAt(a), paid = paidAt(a);
+      return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, a.depositor_name, a.amount_supply, a.paid_amount,
+        (DEPS_BY_APP[a.id]||[]).map(function(d){ return "#"+d.id; }).join(" "), kind==="auto"?"자동 매칭":kind==="manual"?"수동 처리":"입금 기록 없음",
+        depAt ? dt(depAt) : "", dt(a.created_at), paid ? dt(paid) : "PP 직접 지급(시각 미상)"];
     }),
     "세금발행내역": toCsv(DATA.applications.filter(function(a){ return a.tax; }), ["ID","패널","아이디","종류","발행정보","금액","입금상태","처리 구분","입금된금액","발행완료","신청시각(KST)"], function(a){
       var t = a.tax||{};
@@ -1523,7 +1703,7 @@ function downloadCsv(){
     }),
   };
   // 현재 탭에 해당하는 파일만 내려받기 (대시보드에서는 전체)
-  var tabFile = { apps: "신청내역", done: "충전완료내역", deps: "입금내역", tax: "세금발행내역", pays: "포인트충전내역" }[CUR_TAB];
+  var tabFile = { apps: "신청내역", done: "충전완료내역", deps: "입금내역", tax: "세금발행내역", pays: "지급로그" }[CUR_TAB];
   var files = {};
   if (tabFile && allFiles[tabFile]) files[tabFile] = allFiles[tabFile];
   else files = allFiles;
@@ -1680,6 +1860,14 @@ document.getElementById("q").addEventListener("input", function(){
   SEARCH_TIMER = setTimeout(function(){ SHOWN = {}; render(); }, 250);
 });
 document.getElementById("appStatusFilter").addEventListener("change", function(){ SHOWN = {}; render(); });
+["appPanelFilter","doneKind","donePanel","doneFrom","doneTo","doneSort"].forEach(function(id){
+  document.getElementById(id).addEventListener("change", function(){ SHOWN = {}; render(); });
+});
+document.getElementById("doneReset").addEventListener("click", function(){
+  ["doneKind","donePanel","doneFrom","doneTo"].forEach(function(id){ document.getElementById(id).value = ""; });
+  document.getElementById("doneSort").value = "deposit";
+  SHOWN = {}; render();
+});
 
 updateAllEdges();
 load();
