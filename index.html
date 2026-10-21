@@ -126,6 +126,10 @@
   .tablewrap.has-rows td.btns .cv > .sugg, .tablewrap.has-rows td.btns .cv > .warn-text { flex:1 1 100%; min-width:0; }
   .warn-text { color:#b45309; font-size:12px; }
   .noname { color:#dc2626; }
+  /* 미발행 현금영수증·세금계산서: 누르면 세금 발행 탭의 그 신청으로 간다 */
+  a.tax-jump { background:#fff7ed; color:#b45309; border-color:#fed7aa; text-decoration:none; cursor:pointer; }
+  a.tax-jump:hover { background:#ffedd5; }
+  .linked-app { white-space:normal; } /* td.act는 nowrap이라 칩이 늘면 좁은 화면에서 넘친다. 칩 사이에서 줄을 바꾼다 */
 
   /* ── 로그인 & 모달 ── */
   .overlay { position:fixed; inset:0; z-index:50; background:rgba(24,24,27,.45); backdrop-filter:blur(3px); display:none; align-items:flex-start; justify-content:center; overflow-y:auto; padding:8vh 16px 40px; }
@@ -244,6 +248,8 @@
     .refund-cap .formula { text-align:left; }
     .refund-cap .v { font-size:31px; }
   }
+  /* 미발행 표시에서 넘어온 신청 줄. 좁은 화면의 카드 배경(var(--card))보다 뒤에 둬야 이긴다 */
+  .tablewrap tbody tr.flash, .tablewrap tbody tr.flash:hover { background:#fff7ed; }
 </style>
 </head>
 <body>
@@ -619,7 +625,24 @@ function depStatus(d){
   if (!d.parse_ok) c += " " + chip("파싱실패","#fef2f2","#dc2626");
   return c;
 }
-function taxChip(t){ if(!t) return ""; return t.type==="cash_receipt" ? chip("현금영수증","#fefce8","#a16207") : chip("세금계산서","#fdf2f8","#be185d"); }
+function taxChip(t){
+  if(!t) return "";
+  return t.type==="cash_receipt" ? chip("현금영수증","#fefce8","#a16207") : t.type==="tax_invoice" ? chip("세금계산서","#fdf2f8","#be185d") : chip(taxKind(t),"#f4f4f5","#71717a");
+}
+// 모르는 종류를 세금계산서로 뭉뚱그리지 않는다
+function taxKind(t){ return !t ? "" : t.type==="cash_receipt" ? "현금영수증" : t.type==="tax_invoice" ? "세금계산서" : "증빙(종류 미상)"; }
+// 신청한 현금영수증·세금계산서의 발행 여부. 신청하지 않았으면 "". withKind면 종류 이름을 앞에 붙인다(입금 내역 매칭 칸, CSV).
+function taxStateText(a, withKind){
+  if (!a || !a.tax) return "";
+  var st = a.tax_done ? "발행 완료"+(a.tax_done_at ? " "+kstDate(a.tax_done_at).slice(5) : "") : "미발행";
+  return withKind ? taxKind(a.tax)+" "+st : st;
+}
+function taxState(a, withKind){
+  var text = taxStateText(a, withKind);
+  if (!text) return "";
+  if (a.tax_done) return chip(text,"#ecfdf3","#16803c");
+  return '<a href="#" class="chip tax-jump" data-app-id="'+a.id+'" title="세금 발행 탭에서 보기">'+esc(text)+"</a>";
+}
 function taxDetail(t, name){
   if(!t) return "-";
   // 현금영수증은 폰번호만으론 누군지 몰라서 입금자명을 앞에 붙인다. 세금계산서는 상호·대표가 있어 그대로.
@@ -805,7 +828,8 @@ function depositAt(a){
 function linkedAppLabel(id){
   var a = APP_BY_ID[id];
   if (!a) return '<span class="muted">app#'+id+"</span>";
-  return '<span class="muted">app#'+id+"</span> "+appStatus(a.status, a.paid_amount);
+  var tax = taxState(a, true);
+  return '<span class="linked-app"><span class="muted">app#'+id+"</span> "+appStatus(a.status, a.paid_amount)+(tax ? " "+tax : "")+"</span>";
 }
 function appRow(a){
   var action;
@@ -822,7 +846,7 @@ function appRow(a){
   } else action = '<span class="muted">-</span>';
   return '<tr><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td><div class="strong">'+esc(a.username)+"</div>"+sub(esc(a.depositor_name))+
     "</td><td>"+kv([["충전",won(a.amount_supply)+"P","strong"],["입금 안내액",won(a.amount_total)+"원"],["입금됨",won(a.paid_amount)+"원"]])+
-    '</td><td class="st">'+appStatus(a.status,a.paid_amount)+" "+taxChip(a.tax)+'</td><td class="muted">'+dt2(a.created_at)+'</td><td class="act">'+action+"</td></tr>";
+    '</td><td class="st">'+appStatus(a.status,a.paid_amount)+" "+taxChip(a.tax)+" "+taxState(a)+'</td><td class="muted">'+dt2(a.created_at)+'</td><td class="act">'+action+"</td></tr>";
 }
 // 이름 비교용 정규화: 대소문자·공백·특수문자·법인 표기 무시 (서버 deposit_name_score와 같은 기준)
 function normName(v){
@@ -928,7 +952,7 @@ function taxRow(a, mode){
     ? '<span class="muted">입금 확인 후 발행</span>'
     : '<button class="btn-xs btn-done" onclick="taxDone('+a.id+',false)">발행완료 처리</button>';
   var done = mode === true;
-  return '<tr><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td class="strong">'+esc(a.username)+'</td><td class="raw"><div>'+taxChip(a.tax)+"</div>"+
+  return '<tr data-tax-app="'+a.id+'"><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td class="strong">'+esc(a.username)+'</td><td class="raw"><div>'+taxChip(a.tax)+"</div>"+
     sub(taxDetail(a.tax, a.depositor_name))+'</td><td class="st"><div class="num strong">'+won(a.amount_total)+"원</div>"+sub(appStatus(a.status,a.paid_amount))+
     '</td><td class="muted">'+dt2(done ? a.tax_done_at : a.created_at)+'</td><td class="act">'+btn+"</td></tr>";
 }
@@ -1695,8 +1719,9 @@ function downloadCsv(){
       var t = a.tax||{};
       return [a.id, a.panel==="sh"?"소셜헬퍼":"팔로워샵", a.username, t.type==="cash_receipt"?"현금영수증":"세금계산서", t.type==="cash_receipt"?((a.depositor_name?a.depositor_name+" / ":"")+(t.phone||"")):[t.company,t.biz_number,t.email].filter(function(v){return v!=null&&String(v).trim()!=="";}).join(" "), a.amount_total, a.status, a.status==="canceled"&&a.paid_amount>0?"부분 입금 종료":"", a.paid_amount, a.tax_done?"완료":"대기", dt(a.created_at)];
     }),
-    "입금내역": toCsv(DATA.deposits, ["ID","은행","입금자","금액","상태","매칭신청ID","수신시각(KST)","문자원문"], function(d){
-      return [d.id, d.bank, d.depositor_name, d.amount, d.status, d.matched_application_id, dt(d.received_at), d.raw_sms];
+    "입금내역": toCsv(DATA.deposits, ["ID","은행","입금자","금액","상태","매칭신청ID","수신시각(KST)","문자원문","세금 발행"], function(d){
+      return [d.id, d.bank, d.depositor_name, d.amount, d.status, d.matched_application_id, dt(d.received_at), d.raw_sms,
+        d.matched_application_id ? taxStateText(APP_BY_ID[d.matched_application_id], true) : ""];
     }),
     "지급로그": toCsv(DATA.payouts, ["ID","신청ID","패널","아이디","포인트","방식","성공","시각(KST)"], function(p){
       return [p.id, p.application_id, p.panel==="sh"?"소셜헬퍼":"팔로워샵", p.username, p.points, p.method, p.succeeded?"성공":"대기", dt(p.created_at)];
@@ -1735,7 +1760,21 @@ document.addEventListener("click", function(e){
   if (rb) { resolvePayout(rb, "recheck"); return; }
   var xb = e.target.closest(".payout-external-btn");
   if (xb) { resolvePayout(xb, "paid_externally"); return; }
+  var tj = e.target.closest(".tax-jump");
+  if (tj) { e.preventDefault(); jumpToTax(Number(tj.dataset.appId)); return; }
 });
+// 미발행 표시 → 세금 발행 탭의 그 신청 줄(발행 대기, 입금 전이면 신청 접수). "더 보기"에 가려졌으면 펼친다.
+// 검색에 걸러졌거나 발행 대상이 아닌 상태(만료·취소)면 줄이 없어 탭만 연다.
+function jumpToTax(id){
+  document.querySelector('.tab[data-tab="tax"]').click();
+  var find = function(){ return document.querySelector('#panel-tax tr[data-tax-app="'+id+'"]'); };
+  var row = find();
+  if (!row) { SHOWN["t-tax-pending"] = SHOWN["t-tax-applied"] = Infinity; render(); row = find(); }
+  if (!row) return;
+  row.scrollIntoView({ block:"center" });
+  row.classList.add("flash");
+  setTimeout(function(){ row.classList.remove("flash"); }, 2500);
+}
 // 지급 결과를 상태별로 다르게 알린다. 불명확(ambiguous)은 "안 됐다"가 아니다: 지급됐을 수 있으니 PP부터 확인.
 function payOutcomeText(d){
   if (d.paid) return "지급했어요.";
