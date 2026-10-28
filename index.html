@@ -118,6 +118,9 @@
   .btn-xs { font:inherit; font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer; border:1px solid transparent; white-space:nowrap; transition:background .15s; }
   .btn-done { background:var(--ink); color:#fff; } .btn-done:hover { background:#2d2d33; }
   .btn-undo { background:var(--card); color:var(--muted); border-color:var(--border); } .btn-undo:hover { background:#f4f4f6; }
+  .btn-popbill { background:#1d4ed8; color:#fff; } .btn-popbill:hover { background:#1e40af; } .btn-popbill:disabled { opacity:.6; cursor:wait; }
+  .pb-err { display:block; color:#dc2626; font-weight:600; white-space:normal; overflow-wrap:anywhere; }
+  .chip.pb-ok { white-space:normal; overflow-wrap:anywhere; }
   .more-row { display:flex; gap:8px; justify-content:center; padding:12px 0 4px; }
   .more-row .btn-xs { min-height:36px; }
   .sugg { display:flex; flex-direction:column; gap:4px; margin-top:6px; text-align:left; }
@@ -945,15 +948,38 @@ document.getElementById("credit-submit").addEventListener("click", function(){
     })
     .catch(function(e2){ btn.disabled=false; btn.textContent="충전 실행"; err.style.display="block"; err.textContent="네트워크 오류: "+e2.message; });
 });
+// 팝빌 발행 기록(P390). 지금 켜진 환경(test/prod)의 기록만 본다. 키가 없으면 버튼도 상태도 없다.
+function popbillOf(a){
+  var env = DATA && DATA.popbill_environment, rows = (DATA && DATA.popbill) || [];
+  if (!env) return null;
+  for (var i = 0; i < rows.length; i++) if (Number(rows[i].application_id) === Number(a.id) && rows[i].environment === env) return rows[i];
+  return null;
+}
+function popbillState(a){
+  var p = popbillOf(a);
+  if (!p) return "";
+  var test = p.environment === "test" ? "테스트 " : "";
+  if (p.state === "issued") return '<span class="chip pb-ok" style="background:#eff6ff;color:#1d4ed8">'+esc("팝빌 "+test+"발행 "+(p.confirm_num||""))+"</span>";
+  if (p.state === "issuing") return chip("팝빌 결과 확인 중","#fffbeb","#b45309");
+  var msg = p.error_message || "";
+  return '<span class="pb-err" title="'+esc(msg)+'">팝빌 실패: '+esc(msg.length > 60 ? msg.slice(0,60)+"…" : msg)+"</span>";
+}
 function taxRow(a, mode){
+  var pbEnv = DATA && DATA.popbill_environment, pb = popbillOf(a);
+  var pbBtn = mode === false && pbEnv && !(pb && pb.state === "issued")
+    ? '<button class="btn-xs btn-popbill" onclick="popbillIssue('+a.id+',false,this)">'+(pbEnv === "test" ? "팝빌 테스트 발행" : "팝빌 발행")+"</button> " : "";
+  // 팝빌로 운영 발행한 신청은 되돌리지 않는다(서버도 409로 막는다).
   var btn = mode === true
-    ? '<button class="btn-xs btn-undo" onclick="taxDone('+a.id+',true)">되돌리기</button>'
+    ? (pb && pb.state === "issued" && pb.environment === "prod" ? '<span class="muted">팝빌 발행</span>'
+      : '<button class="btn-xs btn-undo" onclick="taxDone('+a.id+',true)">되돌리기</button>')
     : mode === "applied"
     ? '<span class="muted">입금 확인 후 발행</span>'
-    : '<button class="btn-xs btn-done" onclick="taxDone('+a.id+',false)">발행완료 처리</button>';
+    : pbBtn+'<button class="btn-xs btn-done" onclick="taxDone('+a.id+',false)">발행완료 처리</button>';
   var done = mode === true;
+  var pbState = popbillState(a);
   return '<tr data-tax-app="'+a.id+'"><td class="muted">#'+a.id+" "+panelChip(a.panel)+'</td><td class="strong">'+esc(a.username)+'</td><td class="raw"><div>'+taxChip(a.tax)+"</div>"+
     sub(taxDetail(a.tax, a.depositor_name))+'</td><td class="st"><div class="num strong">'+won(a.amount_total)+"원</div>"+sub(appStatus(a.status,a.paid_amount))+
+    (pbState ? sub(pbState) : "")+
     '</td><td class="muted">'+dt2(done ? a.tax_done_at : a.created_at)+'</td><td class="act">'+btn+"</td></tr>";
 }
 var ICONS = {
@@ -1686,8 +1712,38 @@ function taxDone(id, undo){
   if (!undo && !confirm("#"+id+" 발행완료 처리할까요?")) return;
   adminPost(API, { action: "tax_done", application_id: id, undo: undo })
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d.relogin) { logout(); return; } if(!d.ok) alert("실패: "+(d.error||"")); load(); })
+    .then(function(d){ if (d.relogin) { logout(); return; } if(!d.ok) alert("실패: "+(d.message||d.error||"")); load(); })
     .catch(function(e){ alert("네트워크 오류: "+e.message); });
+}
+// 팝빌 발행(P390). 운영 발행은 국세청에 신고되는 실제 발행이라 한 번 더 묻는다.
+// 지연발행 거절이면 가산세 안내 후 동의할 때만 force_late로 다시 보낸다.
+// 확인창에 보인 환경을 같이 보낸다. 서버 환경이 그사이 바뀌었으면 서버가 거절한다.
+// 응답 유실 뒤 팝빌에 이미 발행된 현금영수증이 있으면 서버가 내용을 돌려준다. 운영자가 맞다고 확인할 때만 confirm_existing으로 다시 보낸다.
+function popbillIssue(id, forceLate, btn, env, confirmExisting){
+  env = env || (DATA && DATA.popbill_environment);
+  var test = env === "test";
+  if (!forceLate && !confirmExisting && !confirm("#"+id+" 팝빌로 "+(test ? "테스트 발행할까요?\n(테스트 환경: 실제 발행 아님)" : "발행할까요?\n국세청에 신고되는 실제 발행입니다.\n홈택스 등 다른 곳에서 이미 발행했다면 누르지 말고 '발행완료 처리'를 누르세요."))) return;
+  if (btn) { btn.disabled = true; btn.textContent = "발행 중…"; }
+  adminPost(API, { action: "popbill_issue", application_id: id, environment: env, force_late: forceLate === true, confirm_existing: confirmExisting === true })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.relogin) { logout(); return; }
+      if (d.ok) {
+        alert((d.already ? "이미 발행된 신청이에요" : d.recovered ? "앞 시도가 발행된 것을 확인했어요" : "발행 완료")+(d.confirm_num ? "\n승인번호 "+d.confirm_num : ""));
+      } else if (d.pending) {
+        alert(d.message);
+      } else if (d.needs_review && d.document && confirm((d.message||"")+"\n\n승인번호 "+(d.document.confirm_num||"-")+"\n금액 "+won(d.document.total)+"원\n대상 "+(d.document.identity||"-")+"\n일자 "+(d.document.trade_date||"-")+"\n\n이 신청의 문서가 맞습니까?")) {
+        popbillIssue(id, forceLate, btn, env, true);
+        return;
+      } else if (d.late && confirm((d.message||"")+"\n\n지연발행으로 발행할까요? 가산세 대상일 수 있어요.")) {
+        popbillIssue(id, true, btn, env);
+        return;
+      } else {
+        alert("발행 실패: "+(d.message || d.error || ""));
+      }
+      load();
+    })
+    .catch(function(e){ alert("네트워크 오류: "+e.message); load(); });
 }
 function toCsv(rows, headers, pick){
   var lines = [headers.join(",")];
